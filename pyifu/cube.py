@@ -174,7 +174,30 @@ class Cube( BaseObject ):
     def create(self,data3d,header=None,
                     variance3d=None,
                     lbda=None):
-        """  High level setting method."""
+        """  High level setting method.
+
+        Parameters
+        ----------
+        data3d: [3d array]
+            The x,y, lbda array containing the cube's data
+            
+        variance3d: [3d array] -optional-
+            The variance associated to the data. 
+            This must have the same shape as data
+           
+        header: [pyfits/astropy fits header / None]
+            Header associated to the fits file. It could contains
+            the lbda information (step, size, start). This is needed
+            if lbda is not given.
+
+        lbda: [array] -optional-
+            Provide the wavelength array associated with the data.
+            This is not mendatory if the header contains this information
+            (step, size and start values). 
+            N.B: You can always use set_lbda() later on.
+
+
+        """
         self.set_header(header)
         self.set_data(data3d, variance3d, lbda)
 
