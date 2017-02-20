@@ -285,13 +285,6 @@ class SpecSource( BaseObject ):
         return self._derived_properties["data"]
     
     @property
-    def lbda(self):
-        """ """
-        if self._properties["lbda"] is None:
-            self._properties["lbda"] = self._lbda_from_header_()
-        return self._properties["lbda"]
-
-    @property
     def spec_prop(self):
         if self._derived_properties["spec_prop"] is None:
             self._derived_properties["spec_prop"] = {}
