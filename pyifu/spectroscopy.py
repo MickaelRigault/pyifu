@@ -401,12 +401,41 @@ class Spectrum( SpecSource ):
     #  PLOTTER  #
     # --------- #
     def show(self, toshow="data", ax=None, savefile=None, show=True, **kwargs):
-        """ """
+        """ Display the spectrum.
+        
+        Parameters
+        ----------
+        toshow: [string] -optional-
+            Variable you want to display. anything accessible as self.`toshow` that 
+            has the same size as the wavelength. 
+            If toshow is data or rawdata, the variance will automatically be added
+            if it exists.
+            Do not change this is you have a doubt.
+
+        ax: [matplotlib.Axes] -optional-
+            Provide the axes where the spectrum will be drawn.
+            If None this will create a new one inside a new figure
+            
+        savefile: [string/None] -optional-
+            Would you like to save the data? If so give the name of this
+            file where the plot will be saved.
+            You can provide an extention (.pdf or .png) if you don't both the
+            .pdf and .png will be created.
+
+        show: [bool] -optional-
+            If you do not save the data (see savefile), shall the plot be shown?
+
+        **kwargs goes to specplot (any matplotlib axes.plot entry will work)
+
+        Returns
+        -------
+        Void
+        """
         import matplotlib.pyplot as mpl
         from .tools import figout, specplot
         # - Axis definition
         if ax is None:
-            fig = mpl.figure(figsize=[9,3])
+            fig = mpl.figure(figsize=[9,3.5])
             ax = fig.add_axes([0.10,0.15,0.5,0.75])
             ax.set_xlabel(r"Wavelength", fontsize="large")
             ax.set_ylabel(r"Flux", fontsize="large")
@@ -417,7 +446,7 @@ class Spectrum( SpecSource ):
         spec = eval("self.%s"%toshow)
         var  = self.variance if toshow in ["data", "rawdata"] and self.has_variance() else None
 
-        ax.specplot(self.lbda, spec, var=var)        
+        ax.specplot(self.lbda, spec, var=var, **kwargs)
         # - out
         fig.figout(savefile=savefile, show=show)
         
@@ -707,8 +736,46 @@ class Cube( SpecSource ):
     # ================================ #
     def show(self, toshow="data", savefile=None, ax=None, show=True,
                  show_meanspectrum=True, cmap=None,**kwargs):
-        """
-        This function will call the interactive_cubes class.
+        """ Display the cube.
+        
+        Parameters
+        ----------
+        toshow: [string] -optional-
+            Variable you want to display. anything accessible as self.`toshow` that 
+            has the same size as the wavelength. 
+            If toshow is data or rawdata, the variance will automatically be added
+            if it exists.
+            Do not change this is you have a doubt.
+
+        cmap: [matplotlib colormap]
+            Colormap used for the wavelength integrated cube (imshow).
+
+        show_meanspectrum: [bool] -optional-
+            If True both a wavelength integrated cube (imshow) and the average spectrum 
+            will be displayed. If not, only the wavelength integrated cube (imshow) will.
+
+        ax: [matplotlib.Axes] -optional-
+            Provide the axes where the spectrum and/or the wavelength integrated 
+            cube  will be drawn. 
+            See show_meanspectrum:
+               - If True, 2 axes are requested so axspec, aximshow=ax
+               - If False, 1 axes is needed, aximshow=ax 
+            If None this will create a new axes inside a new figure
+            
+        savefile: [string/None] -optional-
+            Would you like to save the data? If so give the name of this
+            file where the plot will be saved.
+            You can provide an extention (.pdf or .png) if you don't both the
+            .pdf and .png will be created.
+
+        show: [bool] -optional-
+            If you do not save the data (see savefile), shall the plot be shown?
+
+        **kwargs goes to matplotlib's imshow 
+
+        Returns
+        -------
+        Void
         """
         import matplotlib.pyplot as mpl
         from .tools import figout, specplot
