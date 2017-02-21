@@ -1,8 +1,13 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import warnings
 import numpy as np
-from astropy.io import fits as pf
+try:
+    from astropy.io import fits as pf
+except ImportError:
+    warnings.warn("You do not have astropy, you should. Using pyfits instead of astropy.io.fits")
+    import pyfits as pf
+    
 from propobject import BaseObject
 
 
