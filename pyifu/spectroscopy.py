@@ -34,7 +34,8 @@ def load_spectrum(filename,**kwargs):
 #                        #
 ##########################
 class SpecSource( BaseObject ):
-    """ """
+    """ Virtual Object that contains the similaties between Spectrum and Cube. """
+    
     PROPERTIES         = ["rawdata","variance","lbda","header"]
     SIDE_PROPERTIES    = ["filename","fits","header"]
     DERIVED_PROPERTIES = ["data","spec_prop"]
@@ -163,7 +164,7 @@ class SpecSource( BaseObject ):
         self.set_data(data, variance, lbda)
 
     def set_data(self, data, variance=None, lbda=None):
-        """ Set the data of the cube
+        """ Set the spectral data 
 
         Parameters
         ----------
@@ -197,7 +198,7 @@ class SpecSource( BaseObject ):
             self.set_lbda(self, lbda)
 
     def set_lbda(self, lbda):
-        """ Set the wavelength associated with the cube data.
+        """ Set the wavelength associated with the data.
         
         Parameters
         ----------
@@ -236,7 +237,7 @@ class SpecSource( BaseObject ):
 
         
     def set_header(self, header):
-        """ Attach a header to the cube. 
+        """ Attach a header. 
         If the given header is None, an empty header will be attached.
         """
         if header is None:
@@ -297,7 +298,7 @@ class SpecSource( BaseObject ):
     # - Side prop
     @property
     def filename(self):
-        """ The filename of the cube data (if any) """
+        """ The filename of the spectral data (if any) """
         return self._side_properties["filename"]
     
     @property
@@ -350,7 +351,7 @@ class Spectrum( SpecSource ):
     #  Main Method     #
     # ================ #
     def writeto(self,savefile,force=True,saveerror=False):
-        """ Save the cube the given `savefile`
+        """ Save the Spectrum into the given `savefile`
 
         Parameters
         ----------
