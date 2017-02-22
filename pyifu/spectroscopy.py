@@ -33,6 +33,46 @@ def load_spectrum(filename,**kwargs):
     return Spectrum(filename, **kwargs)
 
 
+def synthesize_photometry(lbda, flux, filter_lbda, filter_trans,
+                          normed=True):
+    """ Get Photometry from the given spectral information through the given filter.
+
+    This function converts the flux into photons since the transmission provides the
+    fraction of photons that goes though.
+
+
+    Parameters
+    -----------
+    lbda, flux: [array]
+        Wavelength and flux of the spectrum from which you want to synthetize photometry
+        
+    filter_lbda, filter_trans: [array]
+        Wavelength and transmission of the filter.
+
+    normed: [bool] -optional-
+        Shall the fitler transmission be normalized?
+
+    Returns
+    -------
+    Float (photometric point)
+    """
+    # ---------
+    # The Tool
+    def integrate_photons(lbda, flux, step, flbda, fthroughput):
+        """ """
+        filter_interp = np.interp(lbda, flbda, fthroughput)
+        dphotons = (filter_interp * flux) * lbda * 5.006909561e7
+        return np.trapz(dphotons,lbda) if step is None else np.sum(dphotons*step)
+    
+    # ---------
+    # The Code
+    normband = 1. if not normed else \
+      integrate_photons(lbda,np.ones(len(lbda)),None,filter_lbda,filter_trans)
+      
+    return integrate_photons(lbda,flux,None,filter_lbda,filter_throughput)/normband
+
+
+
 ##########################
 #                        #
 # Low-Level SpecSource   #
@@ -163,7 +203,9 @@ class SpecSource( BaseObject ):
             (step, size and start values). 
             N.B: You can always use set_lbda() later on.
 
-
+        Returns
+        -------
+        Void
         """
         self.set_header(header)
         self.set_data(data, variance, lbda)
@@ -397,6 +439,37 @@ class Spectrum( SpecSource ):
         hdulist = pf.HDUList(hdul)
         hdulist.writeto(savefile,clobber=force)
 
+
+    # --------- #
+    #  Tools    #
+    # --------- #
+    def synthesize_photometry(self, filter_lbda, filter_trans, on="data"):
+        """ Measure the photometry at wich one would have observed this spectra
+        using the given filter.
+        
+        This method uses 'synthesize_photometry', which converts the flux into photons
+        since the transmission provides the fraction of photons that goes though.
+
+
+        Parameters
+        -----------
+        
+        filter_lbda, filter_trans: [array]
+            Wavelength and transmission of the filter.
+            
+        normed: [bool] -optional-
+            Shall the fitler transmission be normalized?
+
+        Returns
+        -------
+        Float (photometric point), Float/None (variance, only if this has a variance and on in ['data','rawdata'])
+        """
+        return synthesize_photometry(self.lbda, eval("self.%s"%on),
+                                         filter_lbda, filter_trans),\
+               synthesize_photometry(self.lbda, self.variance,
+                                         filter_lbda, filter_trans) if self.has_variance() \
+                                         and on in ["data","rawdata"]
+    
     # --------- #
     #  PLOTTER  #
     # --------- #
