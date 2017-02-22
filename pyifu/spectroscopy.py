@@ -468,7 +468,7 @@ class Spectrum( SpecSource ):
                                          filter_lbda, filter_trans),\
                synthesize_photometry(self.lbda, self.variance,
                                          filter_lbda, filter_trans) if self.has_variance() \
-                                         and on in ["data","rawdata"]
+                                         and on in ["data","rawdata"] else None
     
     # --------- #
     #  PLOTTER  #
