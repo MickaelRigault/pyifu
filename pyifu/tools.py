@@ -38,6 +38,15 @@ def make_method(obj):
 # ================== #
 #   MPL Add On       #
 # ================== #
+
+    
+
+
+
+
+
+
+    
 @make_method(mpl.Axes)
 def specplot(ax,x,y,var=None,
              color=None,bandprop={},

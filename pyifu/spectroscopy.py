@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import warnings
 import numpy as np
+import matplotlib.pyplot as mpl
 try:
     from astropy.io import fits as pf
 except ImportError:
@@ -69,7 +70,7 @@ def synthesize_photometry(lbda, flux, filter_lbda, filter_trans,
     normband = 1. if not normed else \
       integrate_photons(lbda,np.ones(len(lbda)),None,filter_lbda,filter_trans)
       
-    return integrate_photons(lbda,flux,None,filter_lbda,filter_throughput)/normband
+    return integrate_photons(lbda,flux,None,filter_lbda,filter_trans)/normband
 
 
 
@@ -242,7 +243,7 @@ class SpecSource( BaseObject ):
             
         # - Wavelength
         if lbda is not None:
-            self.set_lbda(self, lbda)
+            self.set_lbda(lbda)
 
     def set_lbda(self, lbda):
         """ Set the wavelength associated with the data.
@@ -504,7 +505,6 @@ class Spectrum( SpecSource ):
         -------
         Void
         """
-        import matplotlib.pyplot as mpl
         from .tools import figout, specplot
         # - Axis definition
         if ax is None:
@@ -542,9 +542,144 @@ class Cube( SpecSource ):
     This Class is the basic class upon which the other Cube will be based.
     In there, there is just the basic method.
     """
+    PROPERTIES = ["spaxel_mapping","spaxel_vertices"]
     # ================ #
     #  Main Method     #
     # ================ #
+    def create(self,data,header=None,
+                    variance=None,
+                    lbda=None, spaxel_mapping=None):
+        """  High level setting method.
+
+        Parameters
+        ----------
+        data: [array]
+            The array containing the data
+            
+        variance: [array] -optional-
+            The variance associated to the data. 
+            This must have the same shape as data
+           
+        header: [pyfits/astropy fits header / None]
+            Header associated to the fits file. It could contains
+            the lbda information (step, size, start). This is needed
+            if lbda is not given.
+
+        lbda: [array] -optional-
+            Provide the wavelength array associated with the data.
+            This is not mendatory if the header contains this information
+            (step, size and start values). 
+            N.B: You can always use set_lbda() later on.
+
+        spaxel_mapping: [array] -optional-
+            Provide how the data are organised in the 2D grid. 
+            If the given data are 3D cubes (lambda,x,y) no need
+            to provide the mapping, this will be made automatically
+            (see `set_data`)
+
+        Returns
+        -------
+        Void
+        """
+        self.set_header(header)
+        self.set_data(data, variance, lbda,
+                      spaxel_mapping=spaxel_mapping)
+
+    def set_data(self, data, variance=None, lbda=None, spaxel_mapping=None):
+        """ Set the spectral data 
+
+        Parameters
+        ----------
+        data: [array]
+            The array containing the data
+        
+        variance: [array] -optional-
+            The variance associated to the data. 
+            This must have the same shape as data
+           
+        lbda: [array] -optional-
+            Provide the wavelength array associated with the data.
+            This is not mendatory if the header contains this information
+            (step, size and start values). 
+            N.B: You can always use set_lbda() later on.
+            
+        spaxel_mapping: [array] -optional-
+            Provide how the data are organised in the 2D grid. 
+            If the given data are 3D cubes (lambda,x,y) no need
+            to provide the mapping, this will be made automatically
+
+        Returns
+        -------
+        Void
+        """
+        # - 3d data
+        self._properties["rawdata"] = np.asarray(data)
+        # - Variance
+        if variance is not None:
+            if np.shape(variance) != np.shape(data):
+                raise TypeError("variance and data do not have the same shape")
+            self._properties["variance"] = np.asarray(variance)
+
+        self.set_spaxel_mapping(spaxel_mapping)
+        
+        # - Wavelength
+        if lbda is not None:
+            self.set_lbda(lbda)
+
+    def set_spaxel_mapping(self, spaxel_mapping):
+        """ Provide how the data are organised in the 2D grid. 
+        If the data corresponds to a 3D cubes (lambda,x,y) 
+        you can set `spaxel_mapping = None` and this will be made it 
+        automatically
+
+        Parameters
+        ----------
+        spaxel_mapping: [list/None]
+            if provided this list must be a dictionary with this format:
+            {index_0: [x_0, y_0],
+             index_1: [x_1, y_1], 
+             etc.
+            }
+
+        Returns
+        -------
+        Void
+        """
+        if spaxel_mapping is None:
+            # - Is that a 3D cube?
+            if self.is_3d_cube():
+                spaxel_mapping = {}
+                [[spaxel_mapping.setdefault(i+self.data.shape[1]*j,[i,j])
+                      for i in range(self.data.shape[1])] for j in range(self.data.shape[2])]
+                self.set_spaxel_mapping(spaxel_mapping)
+            else:
+                raise ValueError("The cube is not a 3D cube, you must provide a spaxel_mapping")
+            
+        elif type(spaxel_mapping) is not dict:
+            raise TypeError("The given `spaxel_mapping` must be a dictionary. See doc")
+
+        self._properties["spaxel_mapping"] = spaxel_mapping
+
+    def set_spaxel_vertices(self, xy):
+        """ Provide the countours of the polygon that define the spaxel.
+        This will be the default spaxel structure so the central value of
+        the given vertices should be (0,0).
+        
+        Examples:
+        ---------
+        for a square:   xy = [[-0.5, 0.5],[0.5, 0.5],[-0.5,-0.5],[0.5,-0.5]] 
+        for a hexagone: xy = [[1.,0], [1/2., np.sqrt(3/2.)], [-1/2., np.sqrt(3/2.)], [-1,0], 
+                             [-1/2., -np.sqrt(3/2.)], [1/2., -np.sqrt(3/2.)]]
+
+        """
+        if np.shape(xy)[1] != 2:
+            raise TypeError("The given vertices must be a (n,2) array")
+        
+        self._properties["spaxel_vertices"] = np.asarray(xy)
+        
+    # -------- #
+    #   I/O    #
+    # -------- #
     def writeto(self,savefile,force=True,saveerror=False):
         """ Save the cube the given `savefile`
 
@@ -781,6 +916,78 @@ class Cube( SpecSource ):
             
         return np.asarray([np.argwhere(spaxelsrank==i)[0] for i in range(nspaxel)])
 
+
+    def get_spectrum(self, index):
+        """ Return a Spectrum object based on the given index
+        If index is a list of indexes, the mean spectrum will be returned.
+        (see xy_to_index to convert 2D coordinates into index)
+        Returns
+        -------
+        Spectrum
+        """
+        spec = Spectrum(None)
+
+        data = self.get_index_data(index)
+        variance = self.get_index_data(index,data="variance") if self.has_variance() else None
+        
+        if hasattr(index,"__iter__"):
+            # multiple indexes
+            data = np.average(data, weights = 1./np.asarray(variance) if self.has_variance() else None,axis=0)
+            if variance is not None:
+                variance = np.mean(variance, axis=0) / len(index)
+
+        spec.create(data=data, variance=variance, header=None, lbda=self.lbda)
+        return spec
+    # -------------- #
+    # Manage 3D e3D  #
+    # -------------- #
+    def get_index_data(self, index, data="data"):
+        """ Return the `data` corresponding the the ith index """
+        if self.is_3d_cube():
+            if hasattr(index,"__iter__"):
+                return [self.get_index_data(index_,data=data) for index_ in index]
+            x,y = self.index_to_xy(index)
+            return eval("self.%s.T[x,y]"%data)
+
+        return eval("self.%s.T[index]"%data)
+        
+            
+    def index_to_xy(self, index):
+        """ Each spaxel has a unique index (1d-array) entry.
+        This tools enables to know what is the 2D (x,y) position 
+        of this index
+
+        Returns
+        -------
+        [int,int] (x,y)
+        """
+        if hasattr(index,"__iter__"):
+            return [self.index_to_xy(index_) for index_ in index]
+        
+        if index in self.spaxel_mapping:
+            return self.spaxel_mapping[index]
+        return None, None
+    
+    def xy_to_index(self, xy):
+        """ Each spaxel has a unique x,y, location that 
+        can be converted into a unique index (1d-array) entry.
+        This tools enables to know what is the index corresponding to the given
+        2D (x,y) position.
+        
+        Parameters
+        ----------
+        xy: [2d array]
+            x and y position(s) in the following structure:
+            [x,y] or [[x0,y0],[x1,y1]]
+
+        Returns
+        -------
+        list of indexes 
+        """
+        if np.shape(xy) == (2,):
+            return [i for i,v in self.spaxel_mapping.items() if v == xy]
+        return [i for i,v in self.spaxel_mapping.items() if np.any(v in xy)]
+        
     
     # -------------- #
     #  Manipulation  #
@@ -807,7 +1014,9 @@ class Cube( SpecSource ):
     # ================================ #
     # ==     External Tools         == #
     # ================================ #
-    def show(self, toshow="data", savefile=None, ax=None, show=True,
+    def show(self, toshow="data",
+                 interactive=False,
+                 savefile=None, ax=None, show=True,
                  show_meanspectrum=True, cmap=None,**kwargs):
         """ Display the cube.
         
@@ -850,7 +1059,13 @@ class Cube( SpecSource ):
         -------
         Void
         """
-        import matplotlib.pyplot as mpl
+        if interactive:
+            from .mplinteractive import InteractiveCube
+            iplot = InteractiveCube(self,fig=None, axes=ax)
+            iplot.launch()
+            return iplot
+
+        # - Not interactive
         from .tools import figout, specplot
         # - Axis definition
         if ax is None:
@@ -871,25 +1086,71 @@ class Cube( SpecSource ):
             fig  = axim.figure
 
         # - Ploting
-        stack = np.sum(eval("self.%s"%toshow), axis=0)
-        axim.imshow(stack, origin="lower", interpolation="nearest",cmap=cmap,aspect='auto', **kwargs)
+        self._display_im_(axim, toshow, cmap=cmap, **kwargs)
+        self._display_spec_(axspec, toshow,  **kwargs)
         if show_meanspectrum:
-            spec = np.nanmean(np.concatenate(eval("self.%s"%toshow).T), axis=0)
-            var  = np.nanmean(np.concatenate(self.variance.T), axis=0) \
-              if toshow in ["data", "rawdata"] and self.has_variance() else None
-
-            axspec.specplot(self.lbda, spec, var=var)
             axspec.text(0.03,0.95, "Mean Spectrum", transform=axspec.transAxes,
                             va="top", ha="left",
                           bbox={"facecolor":"w", "alpha":0.5,"edgecolor":"None"})
         
         # - out
         fig.figout(savefile=savefile, show=show)
-        
 
+    # --------- #
+    # Internal  #
+    # --------- #
+    def _display_im_(self, axim, toshow="data", cmap=None,
+                         interactive=False, **kwargs):
+        """ """
+        if axim is None:
+            return
+        
+        if not interactive and self.is_3d_cube():
+            # - let's do the simple thing for this usual case
+            return axim.imshow(np.sum(eval("self.%s"%toshow), axis=0), origin="lower",
+                        interpolation="nearest",cmap=cmap,aspect='auto', **kwargs)
+        
+        # ----------------
+        # Internal Imshow
+        from matplotlib import patches
+        # - which colors
+        total_flux = [np.sum(self.get_index_data(i)) for i in range(self.nspaxels)]
+        vmin = kwargs.pop("vmin", np.nanmin(total_flux))
+        vmax = kwargs.pop("vmax", np.nanmax(total_flux))
+        colors = mpl.cm.viridis( (total_flux-vmin)/(vmax-vmin))
+        # - The Patchs
+        ps = [patches.Polygon(self.spaxel_vertices+np.asarray(self.index_to_xy(i)),
+                        facecolor=colors[i],**kwargs) for i  in range(self.nspaxels)]
+        ip = [axim.add_patch(p_) for p_ in ps]
+        axim.autoscale(True, tight=True)
+        return ip
+
+
+        
+    def _display_spec_(self, axspec, toshow="data", **kwargs):
+        """ """
+        if axspec is not None:
+            spec = np.nanmean(np.concatenate(eval("self.%s"%toshow).T), axis=0)
+            var  = np.nanmean(np.concatenate(self.variance.T), axis=0) / np.prod(self.data.shape[1:]) \
+              if toshow is not ["variance"] and self.has_variance() else None
+
+            axspec.specplot(self.lbda, spec, var=var)
+            
+        
     # =================== #
     #   Properties        #
     # =================== #
+    def is_3d_cube(self):
+        """ """
+        return len(self.data.shape) == 3
+
+    @property
+    def spaxel_mapping(self):
+        """ dictionary containing the connection between spaxel index (int) and spaxel position (x,y)"""
+        if self._properties["spaxel_mapping"] is None:
+            self._properties["spaxel_mapping"] = {}
+        return self._properties["spaxel_mapping"]
+    
     def _header_to_spec_prop_(self):
         """ """
         self.spec_prop["wspix"]  = self.header.get('%s1'%self._build_properties["lengthkey"])
@@ -917,5 +1178,23 @@ class Cube( SpecSource ):
         if "nspix" not in self.spec_prop or self.spec_prop["nspix"] is None:
             self.spec_prop["nspix"] = np.shape(self.data)[2]
         return self.spec_prop["nspix"]
+
+    # ------------------
+    # Spaxel Structure
+    @property
+    def nspaxels(self):
+        """ Number of spaxel recorded in the spaxel mapping """
+        return len(self.spaxel_mapping)
     
-    
+    @property
+    def spaxel_mapping(self):
+        """ dictionary containing the connection between spaxel index (int) and spaxel position (x,y)"""
+        return self._properties["spaxel_mapping"]
+
+    @property
+    def spaxel_vertices(self):
+        """ The reference vertices for the spaxels. """
+        if self._properties["spaxel_vertices"] is None:
+            self.set_spaxel_vertices([[0.5, 0.5],[-0.5,0.5],[-0.5, -0.5],[0.5,-0.5]])
+        return self._properties["spaxel_vertices"]
+        
