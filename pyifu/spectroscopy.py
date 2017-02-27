@@ -330,9 +330,8 @@ class SpecSource( BaseObject ):
     def data(self):
         """ """
         if self._derived_properties["data"] is None:
-            self._derived_properties["data"] = self.rawdata.copy() if self.has_data() else None
-        return self._derived_properties["data"]
-    
+            return self.rawdata
+
     @property
     def spec_prop(self):
         if self._derived_properties["spec_prop"] is None:
@@ -658,7 +657,8 @@ class Cube( SpecSource ):
         elif type(spaxel_mapping) is not dict:
             raise TypeError("The given `spaxel_mapping` must be a dictionary. See doc")
 
-        self._properties["spaxel_mapping"] = spaxel_mapping
+        # - make sure the format is correct
+        self._properties["spaxel_mapping"] = {i:np.asarray(v).tolist() for i,v in spaxel_mapping.items()}
 
     def set_spaxel_vertices(self, xy):
         """ Provide the countours of the polygon that define the spaxel.
@@ -984,6 +984,9 @@ class Cube( SpecSource ):
         -------
         list of indexes 
         """
+        # - Following set_spaxels_mapping, v are list
+        # make sure xy too:
+        xy = np.asarray(xy).tolist()
         if np.shape(xy) == (2,):
             return [i for i,v in self.spaxel_mapping.items() if v == xy]
         return [i for i,v in self.spaxel_mapping.items() if np.any(v in xy)]
@@ -1120,7 +1123,7 @@ class Cube( SpecSource ):
         colors = mpl.cm.viridis( (total_flux-vmin)/(vmax-vmin))
         # - The Patchs
         ps = [patches.Polygon(self.spaxel_vertices+np.asarray(self.index_to_xy(i)),
-                        facecolor=colors[i],**kwargs) for i  in range(self.nspaxels)]
+                        facecolor=colors[i], alpha=0.8,**kwargs) for i  in range(self.nspaxels)]
         ip = [axim.add_patch(p_) for p_ in ps]
         axim.autoscale(True, tight=True)
         return ip
@@ -1130,10 +1133,14 @@ class Cube( SpecSource ):
     def _display_spec_(self, axspec, toshow="data", **kwargs):
         """ """
         if axspec is not None:
-            spec = np.nanmean(np.concatenate(eval("self.%s"%toshow).T), axis=0)
-            var  = np.nanmean(np.concatenate(self.variance.T), axis=0) / np.prod(self.data.shape[1:]) \
-              if toshow is not ["variance"] and self.has_variance() else None
-
+            if self.is_3d_cube():
+                spec = np.nanmean(np.concatenate(eval("self.%s"%toshow).T), axis=0)
+                var  = np.nanmean(np.concatenate(self.variance.T), axis=0) / np.prod(self.data.shape[1:]) \
+                  if toshow is not ["variance"] and self.has_variance() else None
+            else:
+                spec = np.nanmean(eval("self.%s"%toshow).T, axis=0)
+                var  = np.nanmean(self.variance.T, axis=0) / np.prod(self.data.shape[1:]) \
+                  if toshow is not ["variance"] and self.has_variance() else None
             axspec.specplot(self.lbda, spec, var=var)
             
         

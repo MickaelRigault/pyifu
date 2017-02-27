@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import warnings
 import numpy as np
-
+from scipy.spatial import distance
 import matplotlib
 from matplotlib import patches
 import matplotlib.pyplot as mpl
@@ -25,8 +25,10 @@ DOCUMENTATION = \
 
    - mouse-clic: to select 1 spaxel
    - mouse-drag: draw the diagonal of a rectangle, select the spaxels within it
-   - `shift` + mouse-drag: draw a polygon with the mouse to select the spaxels within it
-
+   - `shift`  + mouse-drag: draw a polygon with the mouse to select the spaxels within it
+   - `control`+ mouse-drag: the distance between the picked and release points 
+                            to define a Circle. (center = picked position).
+                            Spaxels within this circle will be selected
    # Keyboad keys
    - escape: reset the figue 
    - shift: host this key to allow alternative mouse actions
@@ -37,6 +39,8 @@ DOCUMENTATION = \
    """
 
 
+
+POLYSELECTION_PROP = dict(edgecolor=mpl.cm.binary(0.7,0.7), facecolor=mpl.cm.binary(0.7,0.2))
 
 class InteractiveCube( BaseObject ):
     """ """
@@ -81,8 +85,9 @@ class InteractiveCube( BaseObject ):
             raise AttributeError("If no axes given, please first set the figure.")
         
         if axes is None:
+            figsizes = self.fig.get_size_inches()
             axspec = self.fig.add_axes([0.10,0.15,0.5,0.75])
-            axim   = self.fig.add_axes([0.65,0.15,0.26,0.75])
+            axim   = self.fig.add_axes([0.65,0.15,0.75*figsizes[1]/float(figsizes[0]),0.75])
             axspec.set_xlabel(r"Wavelength", fontsize="large")
             axspec.set_ylabel(r"Flux", fontsize="large")
             self.set_axes([axspec,axim])
@@ -104,7 +109,7 @@ class InteractiveCube( BaseObject ):
         if not self.has_figure():
             raise ValueError("define a figure first")
         # -- let's go -- #
-        self._spaxels = self.cube._display_im_(self.axim, interactive=True)
+        self._spaxels = self.cube._display_im_(self.axim, interactive=True, linewidth=0, edgecolor="0.7")
         self.cube._display_spec_(self.axspec)
 
         self.setup()
@@ -140,6 +145,8 @@ class InteractiveCube( BaseObject ):
         self._clicked         = False
         self.polyselected     = []
         self.selected_spaxels = []
+        self._picked_poly     = None
+        self._tracked_patch   = []
         # ------------ #
         #  Key Setup   #
         # ------------ #
@@ -159,7 +166,7 @@ class InteractiveCube( BaseObject ):
         self.property_backup[self.axim]["default_zordercolor"] = \
               self._spaxels[0].get_zorder()
         self._default_z_order_spaxels = self._spaxels[0].get_zorder()
-
+        self._default_linewidth_spaxels = self._spaxels[0].get_linewidth()
         
     # -------------- #
     #  Information   #
@@ -194,7 +201,7 @@ class InteractiveCube( BaseObject ):
         if event.key in ["h","H"]:
             print(DOCUMENTATION)
             return
-        
+
         self.pressed_key[event.key] = True
         
     def inteact_releasekey(self, event):
@@ -226,27 +233,44 @@ class InteractiveCube( BaseObject ):
     def _onclick_axim_(self, event):
         """ """
         self._clicked = True
-        self._picked_spaxel   = [np.round(event.xdata), np.round(event.ydata)]
+        self._picked_spaxel   = [event.xdata, event.ydata]
         self._tracked_spaxel  = []
         
     def _ontrack_axim_(self, event):
-        if self._clicked and u"shift" in self.pressed_key and self.pressed_key[u"shift"]:
-            self._tracked_spaxel.append([event.xdata, event.ydata])
-        
+        """ What happen with the mouse goes over the axis?"""
+        if self._clicked:
+            # Here, minimal parameter needed to set the polygon are defined.
+            # The actual polygon is defined during the key release.
+            
+            # Any Polygone
+            if u"shift" in self.pressed_key and self.pressed_key[u"shift"]:
+                self._tracked_spaxel.append([event.xdata, event.ydata])
+                self._picked_poly = ["Polygon",   [self._tracked_spaxel]]
+                
+            # A Circle
+            elif u"control" in self.pressed_key and self.pressed_key[u"control"]:
+                self._picked_poly = ["Circle",  [self._picked_spaxel,distance.euclidean(self._picked_spaxel, [event.xdata, event.ydata])]]
+            # Rectangle
+            else:
+                self._picked_poly = ["Polygon", [[[self._picked_spaxel[0], self._picked_spaxel[1]],
+                                                  [self._picked_spaxel[0],event.ydata],
+                                                    [event.xdata,event.ydata], [event.xdata,self._picked_spaxel[1]]]]]
+            
     def _onrelease_axim_(self, event):
         """ """
-        if len(self._tracked_spaxel) >0:
-            poly = patches.Polygon(self._tracked_spaxel)
+        # - Region Selection
+        if self._picked_poly is not None:
+            which, args = self._picked_poly
+            poly = eval("patches.%s(*args)"%(which))
             self.selected_spaxels  = [i for i in range(self.cube.nspaxels) if poly.contains_point( self.cube.index_to_xy(i))]
-        # - With Tracking
-        else:
-            self._released_spaxel = np.round(event.xdata), np.round(event.ydata)
-            x_min,x_max = np.sort([self._picked_spaxel[0],self._released_spaxel[0]])
-            y_min,y_max = np.sort([self._picked_spaxel[1],self._released_spaxel[1]])
-            self.selected_spaxels = np.concatenate([[self.cube.xy_to_index([x_,y_])[0]
-                                                     for x_ in np.arange(x_min,x_max+1)]
-                                                     for y_ in np.arange(y_min,y_max+1)])
+            self._picked_poly = None
             
+        # - Simple Picking
+        else:
+            self.selected_spaxels  = [np.argmin([ distance.euclidean(self.cube.index_to_xy(i),[event.xdata, event.ydata])
+                                                    for i in range(self.cube.nspaxels)])]
+            
+        # - What to do with the selected spaxels            
         # ==== Show the selected spaxels
         if len(self.selected_spaxels)>0:
             self.show_picked_spaxels()
@@ -278,10 +302,12 @@ class InteractiveCube( BaseObject ):
         # - Show me the selected spaxels            
         for p in self.selected_spaxels:
             self._spaxels[p].set_zorder(self._default_z_order_spaxels+1)
-            self._spaxels[p].set_edgecolor("0.7")
+            self._spaxels[p].set_linewidth(self._default_linewidth_spaxels+1)
+            self._spaxels[p].set_edgecolor("k")
+            
             
         self._holded_spaxels.append(self.selected_spaxels)
-
+        
     def _clean_picked_im_(self):
         """ Removes the changes that have been made """
         if not hasattr(self, "_holded_spaxels"):
@@ -291,10 +317,11 @@ class InteractiveCube( BaseObject ):
         for older_spaxels in self._holded_spaxels:
             for p in older_spaxels:
                 self._spaxels[p].set_zorder(self._default_z_order_spaxels)
+                self._spaxels[p].set_linewidth(self._default_linewidth_spaxels)
                 self._spaxels[p].set_edgecolor(self.property_backup[self.axim]["default_edgecolor"])
                 
         self._holded_spaxels = []
-
+        
     # -------- #
     #  Spect   #
     # -------- #
