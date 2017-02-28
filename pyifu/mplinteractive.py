@@ -29,10 +29,14 @@ DOCUMENTATION = \
    - `control`+ mouse-drag: the distance between the picked and release points 
                             to define a Circle. (center = picked position).
                             Spaxels within this circle will be selected
+   => hold the "super" keyboard key avoid clearing the axis while 
+      plotting a newly picked spaxel
+
    # Keyboad keys
    - escape: reset the figue 
    - shift: host this key to allow alternative mouse actions
    - h: print this help
+   - super: hold this key to display a new picked spaxels without clearing the axis.
 
    # Credits
    pyifu ;  Mickael Rigault
@@ -47,7 +51,7 @@ class InteractiveCube( BaseObject ):
     PROPERTIES = ["cube",
                   "figure","axspec","axim"]
 
-    DERIVED_PROPERTIES = ["property_backup","hold"]
+    DERIVED_PROPERTIES = ["property_backup"]
     
     def __init__(self, cube, fig=None, axes=None):
         """ """
@@ -110,9 +114,10 @@ class InteractiveCube( BaseObject ):
             raise ValueError("define a figure first")
         # -- let's go -- #
         self._spaxels = self.cube._display_im_(self.axim, interactive=True, linewidth=0, edgecolor="0.7")
+        
         self.cube._display_spec_(self.axspec)
-
         self.setup()
+
         
         self.interact_connect(axes_enter_event     = self.interact_enter_axis,
                               axes_leave_event     = self.interact_leave_axis,
@@ -147,6 +152,7 @@ class InteractiveCube( BaseObject ):
         self.selected_spaxels = []
         self._picked_poly     = None
         self._tracked_patch   = []
+        self._currentactive   = 0
         # ------------ #
         #  Key Setup   #
         # ------------ #
@@ -201,7 +207,8 @@ class InteractiveCube( BaseObject ):
         if event.key in ["h","H"]:
             print(DOCUMENTATION)
             return
-
+        
+        print event.key
         self.pressed_key[event.key] = True
         
     def inteact_releasekey(self, event):
@@ -293,17 +300,31 @@ class InteractiveCube( BaseObject ):
     # -------- #
     #   axim   #
     # -------- #
+    # ========================== #
+    #  Plot Related Properties   #
+    # ========================== #
+    @property
+    def _active_color(self):
+        c = self._currentactive%10 
+        return "k" if c == 0 else "C%d"%c
+    
+    @property
+    def _hold(self):
+        """ """
+        return self.pressed_key.get("super",False)
+
     def show_picked_spaxels(self):
         """ """
         # - if not hold. Remove the former this
         if not self._hold:
             self._clean_picked_im_()
-
+        else:
+            self._currentactive +=1 
         # - Show me the selected spaxels            
         for p in self.selected_spaxels:
             self._spaxels[p].set_zorder(self._default_z_order_spaxels+1)
             self._spaxels[p].set_linewidth(self._default_linewidth_spaxels+1)
-            self._spaxels[p].set_edgecolor("k")
+            self._spaxels[p].set_edgecolor(self._active_color)
             
             
         self._holded_spaxels.append(self.selected_spaxels)
@@ -313,7 +334,7 @@ class InteractiveCube( BaseObject ):
         if not hasattr(self, "_holded_spaxels"):
             self._holded_spaxels = []
             return
-        
+        self._currentactive = 0
         for older_spaxels in self._holded_spaxels:
             for p in older_spaxels:
                 self._spaxels[p].set_zorder(self._default_z_order_spaxels)
@@ -330,7 +351,7 @@ class InteractiveCube( BaseObject ):
         if not self._hold:
             self.axspec.cla()
         spec = self.cube.get_spectrum(self.selected_spaxels)
-        spec.show(ax=self.axspec)
+        spec.show(ax=self.axspec, color=self._active_color)
         
     # =================== #
     #   Properties        #
@@ -373,14 +394,6 @@ class InteractiveCube( BaseObject ):
                                                             }
         return self._derived_properties["property_backup"]
 
-    def hold(self):
-        self._derived_properties["hold"] = ~ self._hold
-        
-    @property
-    def _hold(self):
-        if self._derived_properties["hold"] is None:
-            self._derived_properties["hold"] = np.False_
-        return self._derived_properties["hold"]
             
 
 
