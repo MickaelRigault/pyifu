@@ -17,39 +17,49 @@ from .tools        import kwargs_update
 DOCUMENTATION = \
    """
    # Concept
-   Show the IFU cube using spectrum- and stacked-image panels
+   
+   Navigate through an IFU cube using spectrum and stacked-image panels.
 
    # Select Spaxels
+   
    The spaxels you select on the 'imshow' like axis will be used 
    to display the corresponding spectrum
-
    - mouse-clic: to select 1 spaxel
    - mouse-drag: draw the diagonal of a rectangle, select the spaxels within it
    - `shift`  + mouse-drag: draw a polygon with the mouse to select the spaxels within it
    - `control`+ mouse-drag: the distance between the picked and release points 
                             to define a Circle. (center = picked position).
                             Spaxels within this circle will be selected
+
    => hold the "super" keyboard key avoid clearing the axis while 
       plotting a newly picked spaxel
 
+   # Select Wavelengthes
+   
+   Select a wavelength range on the 'spectrum-axis' to affect the color mapping
+   on the 'imshow-like axis'. 
+   - drag-mouse: select a wavelength range
+   - single-clic: remove the wavelength selection.
+
    # Keyboad keys
+   
    - escape: reset the figue 
    - shift: host this key to allow alternative mouse actions
    - h: print this help
    - super: hold this key to display a new picked spaxels without clearing the axis.
 
    # Credits
-   pyifu ;  Mickael Rigault
+   
+   pyifu ; Mickael Rigault
    """
 
 
 
-POLYSELECTION_PROP = dict(edgecolor=mpl.cm.binary(0.7,0.7), facecolor=mpl.cm.binary(0.7,0.2))
+WAVESPAN_PROP = dict(edgecolor=mpl.cm.binary(0.7,0.7), facecolor=mpl.cm.binary(0.7,0.2))
 
 class InteractiveCube( BaseObject ):
     """ """
-    PROPERTIES = ["cube",
-                  "figure","axspec","axim"]
+    PROPERTIES = ["cube","figure","axspec","axim"]
 
     DERIVED_PROPERTIES = ["property_backup"]
     
@@ -115,7 +125,9 @@ class InteractiveCube( BaseObject ):
         # -- let's go -- #
         self._spaxels = self.cube._display_im_(self.axim, interactive=True, linewidth=0, edgecolor="0.7")
         
-        self.cube._display_spec_(self.axspec)
+        self._current_spectra = []
+        self._current_spectra.append(self.cube._display_spec_(self.axspec))
+        
         self.setup()
 
         
@@ -135,32 +147,37 @@ class InteractiveCube( BaseObject ):
         [self.fig.canvas.mpl_connect(key,val) for key,val in kwargs.iteritems()]
 
 
-    def reset(self):
-        """ """
-        self._clean_picked_im_()
-        self.axspec.cla()
-        self.cube._display_spec_(self.axspec)
-        
+    def set_to_origin(self):
+        """ Set the internal parameters to their initial values. """
+        #   PICKING    #
         self._clicked         = False
-        self.polyselected     = []
+        self._picked_poly     = None
+        self._currentactive   = 0
         self.selected_spaxels = []
+        #   KEYBOARD   #
+        self.pressed_key      = {}
+        #   AXIM       #
+        #   AXSPEC     #
+        self._current_spectra     = []
+        self._selected_wavelength = None
+        self._axspec_span         = []
+        
+    def reset(self):
+        """ Clean the Axes and set things back to there initial values """
+        self.change_axim_color(None) # Remove selected wavelength
+        self._clean_picked_im_() # Remove Spaxels selected
+        self.clean_axspec(draw=False) # Clear the Axis
+        self.cube._display_spec_(self.axspec) # Draw new spectra
+        self.axspec.set_ylim(self.get_autospec_ylim()) # good ylim
+        self.set_to_origin() # Set back the class to initial conditions
+        self.fig.canvas.draw()
         
     def setup(self):
-        """ """
-        self._clicked         = False
-        self.polyselected     = []
-        self.selected_spaxels = []
-        self._picked_poly     = None
-        self._tracked_patch   = []
-        self._currentactive   = 0
-        # ------------ #
-        #  Key Setup   #
-        # ------------ #
-        self.pressed_key = {}
-        # ------------ #
-        #  Axes Setup  #
-        # ------------ #
-        # - Default Values
+        """ Run That when you launch. """
+
+        self.set_to_origin()
+        
+        # - Default Fixed Values
         self.property_backup[self.axspec]["default_axedgewidth"] = \
           [s_.get_linewidth() for s_ in self.axspec.spines.values()]
 
@@ -171,7 +188,11 @@ class InteractiveCube( BaseObject ):
               self._spaxels[0].get_edgecolor()
         self.property_backup[self.axim]["default_zordercolor"] = \
               self._spaxels[0].get_zorder()
-        self._default_z_order_spaxels = self._spaxels[0].get_zorder()
+
+        self.property_backup[self.axim]["default_facecolors"] = \
+              [sp.get_facecolor() for sp in self._spaxels]
+              
+        self._default_z_order_spaxels   = self._spaxels[0].get_zorder()
         self._default_linewidth_spaxels = self._spaxels[0].get_linewidth()
         
     # -------------- #
@@ -194,8 +215,7 @@ class InteractiveCube( BaseObject ):
             [s_.set_linewidth(self.property_backup[event.inaxes]["default_axedgewidth"][i])
                  for i,s_ in enumerate(event.inaxes.spines.values())]
             event.canvas.draw()
-
-
+            
     # ----------
     # Keyboard
     def interact_presskey(self, event):
@@ -208,7 +228,6 @@ class InteractiveCube( BaseObject ):
             print(DOCUMENTATION)
             return
         
-        print event.key
         self.pressed_key[event.key] = True
         
     def inteact_releasekey(self, event):
@@ -219,6 +238,9 @@ class InteractiveCube( BaseObject ):
     # - Click 
     def interact_onclick(self, event):
         """ """
+        if self.fig.canvas.manager.toolbar._active is not None:
+            return
+        
         if event.inaxes == self.axim:
             self._onclick_axim_(event)
         elif event.inaxes == self.axspec:
@@ -226,15 +248,20 @@ class InteractiveCube( BaseObject ):
 
     def interact_onrelease(self, event):
         """ What would happen when you release the mouse click """
+        if self.fig.canvas.manager.toolbar._active is not None:
+            return
+        
         if event.inaxes == self.axim:
             self._onrelease_axim_(event)
         elif event.inaxes == self.axspec:
             self._onrelease_axspec_(event)
 
     def interact_trackmotion(self, event):
+        if self.fig.canvas.manager.toolbar._active is not None:
+            return
+        
         if event.inaxes == self.axim:
             self._ontrack_axim_(event)
-
             
     # - axim
     def _onclick_axim_(self, event):
@@ -250,12 +277,12 @@ class InteractiveCube( BaseObject ):
             # The actual polygon is defined during the key release.
             
             # Any Polygone
-            if u"shift" in self.pressed_key and self.pressed_key[u"shift"]:
+            if self._keyshift:
                 self._tracked_spaxel.append([event.xdata, event.ydata])
                 self._picked_poly = ["Polygon",   [self._tracked_spaxel]]
                 
             # A Circle
-            elif u"control" in self.pressed_key and self.pressed_key[u"control"]:
+            elif self._keycontrol:
                 self._picked_poly = ["Circle",  [self._picked_spaxel,distance.euclidean(self._picked_spaxel, [event.xdata, event.ydata])]]
             # Rectangle
             else:
@@ -291,8 +318,22 @@ class InteractiveCube( BaseObject ):
     # - axspec
     def _onclick_axspec_(self, event):
         """ """
+        self._selected_wavelength = [event.xdata]
+            
     def _onrelease_axspec_(self, event):
         """ """
+        if self._selected_wavelength is None:
+            return
+        
+        if self._selected_wavelength[0] == event.xdata:
+           self._clean_wave_axspec_()
+           self._selected_wavelength = None
+        else:
+            self._selected_wavelength.append(event.xdata)
+            self.draw_selected_wavelength()
+
+        self.change_axim_color(self._selected_wavelength)
+        self.fig.canvas.draw()
         
     # =================== #
     #   Affect Plot       #
@@ -300,19 +341,6 @@ class InteractiveCube( BaseObject ):
     # -------- #
     #   axim   #
     # -------- #
-    # ========================== #
-    #  Plot Related Properties   #
-    # ========================== #
-    @property
-    def _active_color(self):
-        c = self._currentactive%10 
-        return "k" if c == 0 else "C%d"%c
-    
-    @property
-    def _hold(self):
-        """ """
-        return self.pressed_key.get("super",False)
-
     def show_picked_spaxels(self):
         """ """
         # - if not hold. Remove the former this
@@ -325,7 +353,6 @@ class InteractiveCube( BaseObject ):
             self._spaxels[p].set_zorder(self._default_z_order_spaxels+1)
             self._spaxels[p].set_linewidth(self._default_linewidth_spaxels+1)
             self._spaxels[p].set_edgecolor(self._active_color)
-            
             
         self._holded_spaxels.append(self.selected_spaxels)
         
@@ -344,14 +371,58 @@ class InteractiveCube( BaseObject ):
         self._holded_spaxels = []
         
     # -------- #
-    #  Spect   #
+    #  axspec  #
     # -------- #
     def show_picked_spectrum(self):
         """ """
         if not self._hold:
-            self.axspec.cla()
+            self._clean_spec_axspec_()
         spec = self.cube.get_spectrum(self.selected_spaxels)
-        spec.show(ax=self.axspec, color=self._active_color)
+        self._current_spectra.append(spec.show(ax=self.axspec, color=self._active_color, show=False))
+        self.axspec.set_ylim(self.get_autospec_ylim())
+
+    def get_autospec_ylim(self):
+        """ """
+        edge = 0.1
+        if len(self.axspec.get_lines())>0:
+            ymin, ymax = np.percentile(np.concatenate([l.get_data()[-1] for l in self.axspec.get_lines()]), [0,100])
+            ymin =ymin*(1.+edge) if ymin<0 else ymin*(1-edge)
+            ymax =ymax*(1.+edge) if ymax>0 else ymax*(1-edge)
+            
+            return ymin,ymax
+        return -1,1
+    
+    def draw_selected_wavelength(self):
+        """ """
+        self._clean_wave_axspec_()
+        self._axspec_span.append(self.axspec.axvspan(self._selected_wavelength[0],self._selected_wavelength[1],
+                                                         **WAVESPAN_PROP))
+
+    def change_axim_color(self, lbdalim):
+        """ """
+        colors = self.cube._data_to_color_("data", lbdalim=lbdalim)
+        [s.set_facecolor(c) for s,c in zip(self._spaxels, colors)]
+        
+        
+    def clean_axspec(self, draw=False):
+        self._clean_spec_axspec_()
+        self._clean_wave_axspec_()
+        if draw:
+            self.fig.canvas.draw()
+        
+    def _clean_spec_axspec_(self):
+        """ """
+        self.axspec.lines = [] # remove the spectra lines
+        self.axspec.collections = [] # and their variance
+        
+    def _clean_wave_axspec_(self):
+        """ Remove the selected wavelength """
+        if self._axspec_span is not None:
+            for axs in self._axspec_span:
+                try: # Sometime its fails...
+                    axs.remove()
+                except:
+                    pass
         
     # =================== #
     #   Properties        #
@@ -394,7 +465,26 @@ class InteractiveCube( BaseObject ):
                                                             }
         return self._derived_properties["property_backup"]
 
-            
+    # - On Flight Properties
+    @property
+    def _keyshift(self):
+        """ If the shift key pressed? """
+        return self.pressed_key.get("shift",False)
+    
+    @property
+    def _keycontrol(self):
+        """ If the control key pressed? """
+        return self.pressed_key.get("control",False)
+    
+    @property
+    def _active_color(self):
+        c = self._currentactive%10 
+        return "k" if c == 0 else "C%d"%c
+    
+    @property
+    def _hold(self):
+        """ """
+        return self.pressed_key.get("super",False)
 
 
 

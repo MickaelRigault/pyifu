@@ -518,10 +518,11 @@ class Spectrum( SpecSource ):
         spec = eval("self.%s"%toshow)
         var  = self.variance if toshow in ["data", "rawdata"] and self.has_variance() else None
 
-        ax.specplot(self.lbda, spec, var=var, **kwargs)
+        pl = ax.specplot(self.lbda, spec, var=var, **kwargs)
         # - out
         fig.figout(savefile=savefile, show=show)
         
+        return pl
     # ================ #
     #  Properties      #
     # ================ #
@@ -1103,7 +1104,7 @@ class Cube( SpecSource ):
     # Internal  #
     # --------- #
     def _display_im_(self, axim, toshow="data", cmap=None,
-                         interactive=False, **kwargs):
+                    lbdalim=None, interactive=False, **kwargs):
         """ """
         if axim is None:
             return
@@ -1117,10 +1118,9 @@ class Cube( SpecSource ):
         # Internal Imshow
         from matplotlib import patches
         # - which colors
-        total_flux = [np.sum(self.get_index_data(i)) for i in range(self.nspaxels)]
-        vmin = kwargs.pop("vmin", np.nanmin(total_flux))
-        vmax = kwargs.pop("vmax", np.nanmax(total_flux))
-        colors = mpl.cm.viridis( (total_flux-vmin)/(vmax-vmin))
+        colors = self._data_to_color_(toshow, cmap=cmap,lbdalim=lbdalim,
+                                      vmin = kwargs.pop("vmin",None),
+                                      vmax = kwargs.pop("vmax",None))
         # - The Patchs
         ps = [patches.Polygon(self.spaxel_vertices+np.asarray(self.index_to_xy(i)),
                         facecolor=colors[i], alpha=0.8,**kwargs) for i  in range(self.nspaxels)]
@@ -1128,7 +1128,44 @@ class Cube( SpecSource ):
         axim.autoscale(True, tight=True)
         return ip
 
+    def _data_to_color_(self, toshow="data", lbdalim=None,
+                        cmap=None, vmin=None, vmax=None):
+        """ Convert the given data into colors.
+        This will convert the `data` -> [0,1] scale and then
+        feed that to the matplotlib colormap.
 
+        Parameters
+        ----------
+        toshow: [string] -optional-
+            which property will be used to define the color.
+            
+        lbdalim: [None/2D array] -optional-
+            Lbda limit to be used. 
+            - None: No limit
+            - [min/None ; max/None] lower or upper limit (or None if None)
+        
+        cmap: [matplotlib colormap] -optional-
+            If None, viridis will be used.
+
+        Returns
+        -------
+        RGBA array (len of `data`
+        """
+        if lbdalim is None:
+            flagin = np.ones(len(self.lbda))
+        elif np.shape(lbdalim) != (2,):
+            raise TypeError("lbdalim must be None or [min/max]")
+        else:
+            if lbdalim[0] is None: lbdalim[0] = self.lbda[0]
+            if lbdalim[1] is None: lbdalim[1] = self.lbda[-1]
+            flagin = (self.lbda>=lbdalim[0])*(self.lbda<=lbdalim[1])
+            
+        flagin = np.asarray(flagin, dtype="bool")
+        total_flux = [np.sum(self.get_index_data(i, data=toshow)[flagin]) for i in range(self.nspaxels)]
+        if vmin is None: vmin = np.nanmin(total_flux)
+        if vmax is None: vmax = np.nanmax(total_flux)
+        if cmap is None: cmap = mpl.cm.viridis
+        return cmap( (total_flux-vmin)/(vmax-vmin))
         
     def _display_spec_(self, axspec, toshow="data", **kwargs):
         """ """

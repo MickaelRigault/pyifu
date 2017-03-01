@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 #
 
-DESCRIPTION = "pyifu: Python library to manipulate Integral Field Unit 3D cubes "
+DESCRIPTION = "pyifu: Python library to manipulate Integral Field Unit cubes "
 LONG_DESCRIPTION = """  Python library to manipulate Integral Field Unit (IFU) cubes """
 
 DISTNAME = 'pyifu'
@@ -10,8 +10,8 @@ MAINTAINER = 'Mickael Rigault'
 MAINTAINER_EMAIL = 'mrigault@physik.hu-berlin.de'
 URL = 'https://github.com/MickaelRigault/pyifu'
 LICENSE = 'Apache 2.0'
-DOWNLOAD_URL = 'https://github.com/MickaelRigault/pyifu/0.3'
-VERSION = '0.3.0'
+DOWNLOAD_URL = 'https://github.com/MickaelRigault/pyifu/0.4'
+VERSION = '0.4.0'
 
 try:
     from setuptools import setup, find_packages
