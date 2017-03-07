@@ -139,43 +139,13 @@ class SpecSource( BaseObject ):
     # -------- #
     #  I/O     #
     # -------- #
-    def load(self, filename, dataindex=0, varianceindex=1, headerindex=None):
-        """ 
-
-        lbda - If an hdu column of the fits file is name:
-               "LBDA" or "LAMBDA" or "WAVE" or "WAVELENGTH" or "WAVELENGTHS",
-               the column will the used as lbda
-        
-        """
-        self._side_properties["filename"] = filename
-        self._side_properties["fits"]     = pf.open(filename)
-        
-        if headerindex is None:
-            headerindex = dataindex
-            
-        # Get the data
-        data = self.fits[dataindex].data
-        
-        # Get the variance or the error
-        if varianceindex is not None and len(self.fits)>varianceindex:
-            if self.fits[varianceindex].name.upper() in ["ERR","ERROR", "ERRORS"]:
-                variance = self.fits[varianceindex].data**2
-            else:
-                variance = self.fits[varianceindex].data
-        else:
-            variance = None
-            
-        # Get the LBDA if any
-        lbda_ = [f.data for f in self.fits if f.name.upper() in ["LBDA","LAMBDA", "WAVE", "WAVELENGTH","WAVELENGTHS"]]
-        lbda = None if len(lbda_)==0 else lbda_[0]
-
-        # --- Create the object
-        self.create(data=data, header=self.fits[headerindex].header,
-                    variance=variance, lbda=lbda)
 
     def writeto(self,savefile,force=True,saveerror=False):
         raise NotImplementedError("Write method not implemented for SpecSources")
 
+    def load(self,  filename, dataindex=0, varianceindex=1, headerindex=None):
+        raise NotImplementedError("Load method not implemented for SpecSources")
+    
     # -------- #
     #  SETTER  #
     # -------- #
@@ -439,6 +409,39 @@ class Spectrum( SpecSource ):
         hdulist = pf.HDUList(hdul)
         hdulist.writeto(savefile,clobber=force)
 
+    def load(self, filename, dataindex=0, varianceindex=1, headerindex=None):
+        """ 
+
+        lbda - If an hdu column of the fits file is name:
+               "LBDA" or "LAMBDA" or "WAVE" or "WAVELENGTH" or "WAVELENGTHS",
+               the column will the used as lbda
+        
+        """
+        self._side_properties["filename"] = filename
+        self._side_properties["fits"]     = pf.open(filename)
+        
+        if headerindex is None:
+            headerindex = dataindex
+            
+        # Get the data
+        data = self.fits[dataindex].data
+        
+        # Get the variance or the error
+        if varianceindex is not None and len(self.fits)>varianceindex:
+            if self.fits[varianceindex].name.upper() in ["ERR","ERROR", "ERRORS"]:
+                variance = self.fits[varianceindex].data**2
+            else:
+                variance = self.fits[varianceindex].data
+        else:
+            variance = None
+            
+        # Get the LBDA if any
+        lbda_ = [f.data for f in self.fits if f.name.upper() in ["LBDA","LAMBDA", "WAVE", "WAVELENGTH","WAVELENGTHS"]]
+        lbda = None if len(lbda_)==0 else lbda_[0]
+
+        # --- Create the object
+        self.create(data=data, header=self.fits[headerindex].header,
+                    variance=variance, lbda=lbda)
 
     # --------- #
     #  Tools    #
@@ -681,7 +684,7 @@ class Cube( SpecSource ):
     # -------- #
     #   I/O    #
     # -------- #
-    def writeto(self,savefile,force=True,saveerror=False):
+    def writeto(self,savefile, force=True, saveerror=False):
         """ Save the cube the given `savefile`
 
         Parameters
@@ -693,7 +696,7 @@ class Cube( SpecSource ):
             If the file already exist, shall this overwrite it ? 
             (hence erasing the former one)
 
-        saveerror:  [bool]      
+        saveerror:  [bool] -optional- 
             Set this to True if you wish to record the error and not the variance
             in you first hdu-table. if False, the table will be called
             VARIANCE and have self.v; if True, the table will be called
@@ -703,34 +706,119 @@ class Cube( SpecSource ):
         -------
         Void
         """
+        from astropy.io import fits as pf
         hdul = []
         # -- Data saving
-        hdul.append(pf.PrimaryHDU(self.data, self.header))
-        
-        # -- Variance saving
+        hduP = pf.PrimaryHDU(self.data, pf.header.Header())
+        hdul.append(hduP)
+    
         if self.has_variance():
             hduVar  = pf.ImageHDU(np.sqrt(self.variance), name='ERROR') if saveerror else\
-              pf.ImageHDU(self.variance, name='VARIANCE')
+                      pf.ImageHDU(self.variance, name='VARIANCE') 
             hdul.append(hduVar)
-            
-        if self.has_spec_setup():
-            hduVar.header.update('%s1'%self._build_properties["lengthkey"],self.spec_prop["wspix"])
-            hduVar.header.update('%s2'%self._build_properties["lengthkey"],self.spec_prop["nspix"])  
-            hduVar.header.update('%s3'%self._build_properties["lengthkey"],self.spec_prop["lspix"])   
-            
-            hduVar.header.update('%s1'%self._build_properties["stepkey"],self.spec_prop["wstep"])
-            hduVar.header.update('%s2'%self._build_properties["stepkey"],self.spec_prop["nstep"])
-            hduVar.header.update('%s3'%self._build_properties["stepkey"],self.spec_prop["lstep"])
-            
-            hduVar.header.update('%s1'%self._build_properties["startkey"],self.spec_prop["wstart"])
-            hduVar.header.update('%s2'%self._build_properties["startkey"],self.spec_prop["nstart"])
-            hduVar.header.update('%s3'%self._build_properties["startkey"],self.spec_prop["lstart"])
+        
+        naxis = 3 if self.is_3d_cube() else 2
+        hduP.header.update('NAXIS',naxis)
+        if "lstep" in self.spec_prop.keys():
+            hduP.header.update('%s%d'%(self._build_properties["lengthkey"],naxis),self.spec_prop["lspix"])   
+            hduP.header.update('%s%d'%(self._build_properties["stepkey"],naxis),  self.spec_prop["lstep"])
+            hduP.header.update('%s%d'%(self._build_properties["startkey"],naxis), self.spec_prop["lstart"])
         else:
-            hdul.append(pf.ImageHDU(self.lbda, name='LBDA'))
-                
+            hduP.append(pf.ImageHDU(self.lbda, name='LBDA'))
+    
+        if self.is_3d_cube():
+            hduP.header.update('%s1'%self._build_properties["lengthkey"],self.spec_prop["wspix"])
+            hduP.header.update('%s2'%self._build_properties["lengthkey"],self.spec_prop["nspix"])  
+            hduP.header.update('%s1'%self._build_properties["stepkey"],self.spec_prop["wstep"])
+            hduP.header.update('%s2'%self._build_properties["stepkey"],self.spec_prop["nstep"])
+            hduP.header.update('%s1'%self._build_properties["startkey"],self.spec_prop["wstart"])
+            hduP.header.update('%s2'%self._build_properties["startkey"],self.spec_prop["nstart"])
+        else:
+            hduP.header.update('%s1'%self._build_properties["lengthkey"],self.spec_prop["wspix"])
+            hduP.header.update('%s1'%self._build_properties["stepkey"],self.spec_prop.get("wstep", 1))
+            hduP.header.update('%s1'%self._build_properties["startkey"],self.spec_prop.get("wstart",0))
+            hdul.append(pf.ImageHDU([v for i,v in self.spaxel_mapping.items()], name='MAPPING'))
+            hdul.append(pf.ImageHDU([i for i,v in self.spaxel_mapping.items()], name='SPAX_ID'))
+            hdul.append(pf.ImageHDU(self.spaxel_vertices, name='SPAX_VERT'))
+            # Spaxel Shape
+            #e3d_group = pf.PrimaryHDU(self.data, pf.header.Header())
+            #hdul.append(pf.ImageHDU([v for i,v in self.spaxel_mapping.items()], name='E3D_GRP'))
+            
         hdulist = pf.HDUList(hdul)
         hdulist.writeto(savefile,clobber=force)
+        
 
+    def load(self, filename, dataindex=0, varianceindex=1, headerindex=None):
+        """  load the data cube. 
+        Several format have been predifed. 
+        
+        lbda - If an hdu column of the fits file is name:
+               "LBDA" or "LAMBDA" or "WAVE" or "WAVELENGTH" or "WAVELENGTHS",
+               the column will the used as lbda
+               
+        // For non 3D cubes
+
+        spaxel_mapping - looks for a column named "MAPPING" or "POS"
+            This column contains the [x,y] coordinates of the spaxels
+            In addition this looks for a column named "INDEXES" or "SPAX_ID"
+            that contains the spaxels id. If not the spaxels will be order 0,1...N
+        
+        spaxel_vertices - looks for a column name "SPAX_VERT" that contains
+            the vertices of the spaxels. 
+            (not mandatory)
+        
+        
+        """
+        self._side_properties["filename"] = filename
+        self._side_properties["fits"]     = pf.open(filename)
+        
+        if headerindex is None:
+            headerindex = dataindex
+            
+        # Get the data
+        data = self.fits[dataindex].data
+        
+        # Get the variance or the error
+        if varianceindex is not None and len(self.fits)>varianceindex:
+            if self.fits[varianceindex].name.upper() in ["ERR","ERROR", "ERRORS"]:
+                variance = self.fits[varianceindex].data**2
+            else:
+                variance = self.fits[varianceindex].data
+        else:
+            variance = None
+            
+        # Get the LBDA if any
+        lbda_ = [f.data for f in self.fits if f.name.upper() in ["LBDA","LAMBDA", "WAVE", "WAVELENGTH","WAVELENGTHS"]]
+        lbda = None if len(lbda_)==0 else lbda_[0]
+
+        # = Spaxel Positions
+        naxis = self.fits[headerindex].header.get("NAXIS",None)
+        if naxis is not None and naxis ==2:
+            # euro3d format
+            mapping = [f.data for f in self.fits if f.name.upper() in ["MAPPING", "POS"]]
+            indexes = [f.data for f in self.fits if f.name.upper() in ["INDEXES","SPAX_ID"]]
+            
+            if len(mapping) ==0:
+                raise TypeError("Could not find the SPAXEL MAPPING entry (MAPPING)")
+            mapping = mapping[0]
+            if len(indexes) ==0:
+                warnings.warn("No indexes found for the spaxel mapping. arange used (0,1,...N)")
+                indexes = np.arange(len(mapping))
+            else:
+                indexes = indexes[0]
+                
+            spaxel_mapping = {i:v.tolist() for i,v in zip(indexes, mapping)}
+        else: # most likely 3D format
+            spaxel_mapping= None
+            
+        # = Spaxel Shape
+        spaxels_vertices = [f.data for f in self.fits if f.name.upper() in ["SPAX_VERT"]]
+        if len(spaxels_vertices) >0:
+            self.set_spaxel_vertices(spaxels_vertices[0])
+            
+        # --- Create the object
+        self.create(data=data, header=self.fits[headerindex].header,
+                    variance=variance, lbda=lbda, spaxel_mapping=spaxel_mapping)
     # --------- #
     #  SPAXEL   #
     # --------- #
@@ -1032,8 +1120,12 @@ class Cube( SpecSource ):
             If toshow is data or rawdata, the variance will automatically be added
             if it exists.
             Do not change this is you have a doubt.
+            
+        interactive: [bool] -optional- 
+           Enable to interact with the plot to navigate through the cube.
+           (this might depend on your matplotlib setup.)
 
-        cmap: [matplotlib colormap]
+        cmap: [matplotlib colormap] -optional-
             Colormap used for the wavelength integrated cube (imshow).
 
         show_meanspectrum: [bool] -optional-
@@ -1197,17 +1289,25 @@ class Cube( SpecSource ):
     
     def _header_to_spec_prop_(self):
         """ """
-        self.spec_prop["wspix"]  = self.header.get('%s1'%self._build_properties["lengthkey"])
-        self.spec_prop["nspix"]  = self.header.get('%s2'%self._build_properties["lengthkey"])
-        self.spec_prop["lspix"]  = self.header.get('%s3'%self._build_properties["lengthkey"])
-        
-        self.spec_prop["wstep"]  = self.header.get('%s1'%self._build_properties["stepkey"])
-        self.spec_prop["nstep"]  = self.header.get('%s2'%self._build_properties["stepkey"])
-        self.spec_prop["lstep"]  = self.header.get('%s3'%self._build_properties["stepkey"])
+        if self.header.get("NAXIS") ==2:
+            self.spec_prop["wspix"]  = self.header.get('%s1'%self._build_properties["lengthkey"])
+            self.spec_prop["lspix"]  = self.header.get('%s2'%self._build_properties["lengthkey"])
+            self.spec_prop["wstep"]  = self.header.get('%s1'%self._build_properties["stepkey"])
+            self.spec_prop["lstep"]  = self.header.get('%s2'%self._build_properties["stepkey"])
+            self.spec_prop["wstart"] = self.header.get('%s1'%self._build_properties["startkey"])
+            self.spec_prop["lstart"] = self.header.get('%s2'%self._build_properties["startkey"])
+        else:            
+            self.spec_prop["wspix"]  = self.header.get('%s1'%self._build_properties["lengthkey"])
+            self.spec_prop["nspix"]  = self.header.get('%s2'%self._build_properties["lengthkey"])
+            self.spec_prop["lspix"]  = self.header.get('%s3'%self._build_properties["lengthkey"])
 
-        self.spec_prop["wstart"] = self.header.get('%s1'%self._build_properties["startkey"])
-        self.spec_prop["nstart"] = self.header.get('%s2'%self._build_properties["startkey"])
-        self.spec_prop["lstart"] = self.header.get('%s3'%self._build_properties["startkey"])
+            self.spec_prop["wstep"]  = self.header.get('%s1'%self._build_properties["stepkey"])
+            self.spec_prop["nstep"]  = self.header.get('%s2'%self._build_properties["stepkey"])
+            self.spec_prop["lstep"]  = self.header.get('%s3'%self._build_properties["stepkey"])
+
+            self.spec_prop["wstart"] = self.header.get('%s1'%self._build_properties["startkey"])
+            self.spec_prop["nstart"] = self.header.get('%s2'%self._build_properties["startkey"])
+            self.spec_prop["lstart"] = self.header.get('%s3'%self._build_properties["startkey"])
 
     # -----------
     # - internal

@@ -120,6 +120,7 @@ class InteractiveCube( BaseObject ):
     # ============================== #
     def launch(self):
         """ """
+        from .tools import ipython_info
         if not self.has_figure():
             raise ValueError("define a figure first")
         # -- let's go -- #
@@ -140,7 +141,11 @@ class InteractiveCube( BaseObject ):
                               
                               key_press_event      = self.interact_presskey,
                               key_release_event    = self.inteact_releasekey)
-        self.fig.show()
+        
+        if ipython_info() == "notebook":
+            self.fig.show()
+        else:
+            mpl.show()
         
     def interact_connect(self, **kwargs):
         """ More method that connect the event and the actions """

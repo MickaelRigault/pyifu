@@ -35,6 +35,12 @@ def make_method(obj):
 
     return decorate
 
+def ipython_info():
+    import sys
+    return 'notebook' if 'ipykernel' in sys.modules \
+      else "terminal" if 'Ipython' in sys.modules \
+    else None
+    
 # ================== #
 #   MPL Add On       #
 # ================== #
