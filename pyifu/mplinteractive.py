@@ -301,13 +301,14 @@ class InteractiveCube( BaseObject ):
         if self._picked_poly is not None:
             which, args = self._picked_poly
             poly = eval("patches.%s(*args)"%(which))
-            self.selected_spaxels  = [i for i in range(self.cube.nspaxels) if poly.contains_point( self.cube.index_to_xy(i))]
+            self.selected_spaxels  = [i for i,id_ in enumerate(self.cube.indexes)
+                                        if poly.contains_point( self.cube.index_to_xy(id_)) ]
             self._picked_poly = None
             
         # - Simple Picking
         else:
-            self.selected_spaxels  = [np.argmin([ distance.euclidean(self.cube.index_to_xy(i),[event.xdata, event.ydata])
-                                                    for i in range(self.cube.nspaxels)])]
+            self.selected_spaxels  = [np.argmin([distance.euclidean(self.cube.index_to_xy(i),[event.xdata, event.ydata])
+                                                    for i in self.cube.indexes])]
             
         # - What to do with the selected spaxels            
         # ==== Show the selected spaxels

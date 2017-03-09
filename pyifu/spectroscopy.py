@@ -1214,8 +1214,8 @@ class Cube( SpecSource ):
                                       vmin = kwargs.pop("vmin",None),
                                       vmax = kwargs.pop("vmax",None))
         # - The Patchs
-        ps = [patches.Polygon(self.spaxel_vertices+np.asarray(self.index_to_xy(i)),
-                        facecolor=colors[i], alpha=0.8,**kwargs) for i  in range(self.nspaxels)]
+        ps = [patches.Polygon(self.spaxel_vertices+np.asarray(self.index_to_xy(id_)),
+                        facecolor=colors[i], alpha=0.8,**kwargs) for i,id_  in enumerate(self.indexes)]
         ip = [axim.add_patch(p_) for p_ in ps]
         axim.autoscale(True, tight=True)
         return ip
@@ -1329,6 +1329,10 @@ class Cube( SpecSource ):
     def nspaxels(self):
         """ Number of spaxel recorded in the spaxel mapping """
         return len(self.spaxel_mapping)
+    @property
+    def indexes(self):
+        """ Name/ID of the spaxels. (keys from spaxel_mapping)"""
+        return self.spaxel_mapping.keys() if self.spaxel_mapping is not None else []
     
     @property
     def spaxel_mapping(self):
