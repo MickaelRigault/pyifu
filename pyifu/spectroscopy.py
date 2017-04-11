@@ -88,7 +88,6 @@ class SpecSource( BaseObject ):
     
     def __init__(self,filename,
                  dataindex=0,
-                 varianceindex=1,
                  headerindex=None):
         """ Initializes the object
         
@@ -104,10 +103,6 @@ class SpecSource( BaseObject ):
            registered. If you do not know leave 0, 
            for some cases (like MUSE) uses 1.
 
-        varianceindex: [int]     
-            Index of the hdu-table where the variance
-            are registered. If you do not know leave 1.
-
         headerindex: [int/None] 
             Index of the hdu-table where the header you want to use it.
             The default header is the one contained in the dataindex 
@@ -120,7 +115,6 @@ class SpecSource( BaseObject ):
         self.__build__()
         if filename is not None:
             self.load(filename,dataindex=dataindex,
-                      varianceindex=varianceindex,
                       headerindex=headerindex)
 
     def __build__(self):
@@ -246,7 +240,7 @@ class SpecSource( BaseObject ):
             self._properties["lbda"] = None
             return
         # - unique step array?
-        if len(np.unique(lbda[1:]-lbda[:-1]))==1:
+        if len(np.unique(np.round(lbda[1:]-lbda[:-1], decimals=4)))==1:
             # slower and a bit convoluted but ensure class' consistency
             self._lbda_to_header_(lbda)
             self._properties["lbda"] = self._lbda_from_header_()
@@ -259,7 +253,7 @@ class SpecSource( BaseObject ):
         If the given header is None, an empty header will be attached.
         """
         if header is None:
-            self._side_properties["header"] = pf.header.Header
+            self._side_properties["header"] = pf.header.Header()
         else:
             self._side_properties["header"] = header
             self._header_to_spec_prop_()
@@ -724,7 +718,7 @@ class Cube( SpecSource ):
             hduP.header.update('%s%d'%(self._build_properties["stepkey"],naxis),  self.spec_prop["lstep"])
             hduP.header.update('%s%d'%(self._build_properties["startkey"],naxis), self.spec_prop["lstart"])
         else:
-            hduP.append(pf.ImageHDU(self.lbda, name='LBDA'))
+            hdul.append(pf.ImageHDU(self.lbda, name='LBDA'))
     
         if self.is_3d_cube():
             hduP.header.update('%s1'%self._build_properties["lengthkey"],self.spec_prop["wspix"])
@@ -734,7 +728,7 @@ class Cube( SpecSource ):
             hduP.header.update('%s1'%self._build_properties["startkey"],self.spec_prop["wstart"])
             hduP.header.update('%s2'%self._build_properties["startkey"],self.spec_prop["nstart"])
         else:
-            hduP.header.update('%s1'%self._build_properties["lengthkey"],self.spec_prop["wspix"])
+            hduP.header.update('%s1'%self._build_properties["lengthkey"],self.spec_prop.get("wspix", len(self.rawdata.T)))
             hduP.header.update('%s1'%self._build_properties["stepkey"],self.spec_prop.get("wstep", 1))
             hduP.header.update('%s1'%self._build_properties["startkey"],self.spec_prop.get("wstart",0))
             hdul.append(pf.ImageHDU([v for i,v in self.spaxel_mapping.items()], name='MAPPING'))
@@ -748,7 +742,7 @@ class Cube( SpecSource ):
         hdulist.writeto(savefile,clobber=force)
         
 
-    def load(self, filename, dataindex=0, varianceindex=1, headerindex=None):
+    def load(self, filename, dataindex=0, headerindex=None):
         """  load the data cube. 
         Several format have been predifed. 
         
@@ -779,13 +773,13 @@ class Cube( SpecSource ):
         data = self.fits[dataindex].data
         
         # Get the variance or the error
-        if varianceindex is not None and len(self.fits)>varianceindex:
-            if self.fits[varianceindex].name.upper() in ["ERR","ERROR", "ERRORS"]:
-                variance = self.fits[varianceindex].data**2
-            else:
-                variance = self.fits[varianceindex].data
+        variance = [f.data for f in self.fits if f.name.upper() in ["VAR",'VARIANCE', "VARIANCES"]]
+        if len(variance)==0:
+            variance = [f.data**2 for f in self.fits if f.name.upper() in ["ERR","ERROR", "ERRORS"]]
+        if len(variance)==0:
+            variance= None
         else:
-            variance = None
+            variance = variance[0]
             
         # Get the LBDA if any
         lbda_ = [f.data for f in self.fits if f.name.upper() in ["LBDA","LAMBDA", "WAVE", "WAVELENGTH","WAVELENGTHS"]]
@@ -819,6 +813,42 @@ class Cube( SpecSource ):
         # --- Create the object
         self.create(data=data, header=self.fits[headerindex].header,
                     variance=variance, lbda=lbda, spaxel_mapping=spaxel_mapping)
+
+    # --------- #
+    #  SLICES   #
+    # --------- #
+    def get_slice(self, lbda_min, lbda_max, usemean=False):
+        """ Returns a array containing the [weighted] average for the 
+        spaxels within the given range.
+        
+        
+        Parameters
+        ----------
+        lbda_min, lbda_max: [None or float]
+            lower and higher boundaries of the wavelength (in Angstrom) defining the slice.
+            None means no limit.
+            
+        usemean: [bool] -optional-
+            If the cube has a variance, the slice will be the weighted mean (weighted by inverse of variance) 
+            of the slice value within the wavelength range except if 'usemean' is set to True. 
+            In that case, the mean (and not weigthed mean) will be used.
+
+        Returns
+        -------
+        array of float
+        """
+        if lbda_min is None: lbda_min = self.lbda[0]
+        if lbda_max is None: lbda_max = self.lbda[-1]
+        flagin = (self.lbda>=lbda_min)*(self.lbda<=lbda_max)
+        flagin = np.asarray(flagin, dtype="bool")
+        if not self.has_variance() or usemean:
+            return np.asarray([np.nanmean(self.get_index_data(i, data="data")[flagin])
+                                   for i in range(self.nspaxels)])
+        else:
+            return np.asarray([np.average(self.get_index_data(i, data="data")[flagin],
+                                    weights=1./self.get_index_data(i, data="variance")[flagin])
+                                   for i in range(self.nspaxels)])
+                
     # --------- #
     #  SPAXEL   #
     # --------- #
@@ -1005,7 +1035,6 @@ class Cube( SpecSource ):
             
         return np.asarray([np.argwhere(spaxelsrank==i)[0] for i in range(nspaxel)])
 
-
     def get_spectrum(self, index):
         """ Return a Spectrum object based on the given index
         If index is a list of indexes, the mean spectrum will be returned.
@@ -1027,6 +1056,7 @@ class Cube( SpecSource ):
 
         spec.create(data=data, variance=variance, header=None, lbda=self.lbda)
         return spec
+    
     # -------------- #
     # Manage 3D e3D  #
     # -------------- #
@@ -1210,7 +1240,7 @@ class Cube( SpecSource ):
         # Internal Imshow
         from matplotlib import patches
         # - which colors
-        colors = self._data_to_color_(toshow, cmap=cmap,lbdalim=lbdalim,
+        colors = self._data_to_color_(toshow, cmap=cmap, lbdalim=lbdalim,
                                       vmin = kwargs.pop("vmin",None),
                                       vmax = kwargs.pop("vmax",None))
         # - The Patchs
@@ -1244,20 +1274,17 @@ class Cube( SpecSource ):
         RGBA array (len of `data`
         """
         if lbdalim is None:
-            flagin = np.ones(len(self.lbda))
+            lbdalim = [None,None]
         elif np.shape(lbdalim) != (2,):
             raise TypeError("lbdalim must be None or [min/max]")
         else:
-            if lbdalim[0] is None: lbdalim[0] = self.lbda[0]
-            if lbdalim[1] is None: lbdalim[1] = self.lbda[-1]
-            flagin = (self.lbda>=lbdalim[0])*(self.lbda<=lbdalim[1])
+            lbdalim = np.sort(lbdalim)
             
-        flagin = np.asarray(flagin, dtype="bool")
-        total_flux = [np.sum(self.get_index_data(i, data=toshow)[flagin]) for i in range(self.nspaxels)]
-        if vmin is None: vmin = np.nanmin(total_flux)
-        if vmax is None: vmax = np.nanmax(total_flux)
+        mean_flux = self.get_slice(lbdalim[0], lbdalim[1], usemean=False)
+        if vmin is None: vmin = np.nanmin(mean_flux)
+        if vmax is None: vmax = np.nanmax(mean_flux)
         if cmap is None: cmap = mpl.cm.viridis
-        return cmap( (total_flux-vmin)/(vmax-vmin))
+        return cmap( (mean_flux-vmin)/(vmax-vmin))
         
     def _display_spec_(self, axspec, toshow="data", **kwargs):
         """ """
