@@ -13,7 +13,7 @@ from propobject import BaseObject
 
 
 
-__all__ = ["load_cube","load_spectrum"]
+__all__ = ["load_cube","load_spectrum", "get_spectrum"]
 
 def load_cube(filename,**kwargs):
     """ Load a Cube from the given filename 
@@ -33,6 +33,31 @@ def load_spectrum(filename,**kwargs):
     """
     return Spectrum(filename, **kwargs)
 
+
+def get_spectrum(lbda, flux, variance=None, header=None):
+    """ Create a spectrum from the given data
+    
+    Parameters
+    ----------
+    lbda: [array]
+        wavelength of the spectrum
+
+    flux: [array]
+        flux of the spectrum
+    
+    variance: [array/None] -optional-
+        variance associated to the flux.
+
+    header: [fits header / None]
+        fits header assoiated to the data
+
+    Returns
+    -------
+    Spectrum
+    """
+    spec = Spectrum(None)
+    spec.create(data=flux, variance=variance, header=None, lbda=lbda)
+    return spec
 
 def synthesize_photometry(lbda, flux, filter_lbda, filter_trans,
                           normed=True):
@@ -295,6 +320,7 @@ class SpecSource( BaseObject ):
         """ """
         if self._derived_properties["data"] is None:
             return self.rawdata
+        return self._derived_properties["data"]
 
     @property
     def spec_prop(self):
@@ -302,7 +328,7 @@ class SpecSource( BaseObject ):
             self._derived_properties["spec_prop"] = {}
         return self._derived_properties["spec_prop"]
 
-    def has_spec_setup(self):
+    def _has_spec_setup_(self):
         """ Test if the spaxels properties has been step up"""
         return len(self.spec_prop.keys())>0
 
@@ -327,9 +353,11 @@ class SpecSource( BaseObject ):
 
     def _lbda_from_header_(self):
         """ """
-        if not self.has_spec_setup():
+        if not self._has_spec_setup_():
             return None
-        return np.arange(self.spec_prop["lspix"]) * self.spec_prop["lstep"] + self.spec_prop["lstart"]
+        
+        return np.arange(self.spec_prop["lspix"]) * self.spec_prop["lstep"] + self.spec_prop["lstart"] \
+          if self.spec_prop["lstart"] > 50 else np.exp(np.arange(self.spec_prop["lspix"]) * self.spec_prop["lstep"] + self.spec_prop["lstart"])
 
     def _lbda_to_header_(self, lbda):
         """ converts the lbda array into step, size and start and feed it to
@@ -393,10 +421,10 @@ class Spectrum( SpecSource ):
               pf.ImageHDU(self.variance, name='VARIANCE')
             hdul.append(hduVar)
             
-        if self.has_spec_setup():
-            hduVar.header.update('%s1'%self._build_properties["lengthkey"],self.spec_prop["lspix"])   
-            hduVar.header.update('%s1'%self._build_properties["stepkey"],self.spec_prop["lstep"])
-            hduVar.header.update('%s1'%self._build_properties["startkey"],self.spec_prop["lstart"])
+        if self._has_spec_setup_():
+            hduVar.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop["lspix"])   
+            hduVar.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop["lstep"])
+            hduVar.header.set('%s1'%self._build_properties["startkey"],self.spec_prop["lstart"])
         else:
             hdul.append(pf.ImageHDU(self.lbda, name='LBDA'))
                 
@@ -466,6 +494,26 @@ class Spectrum( SpecSource ):
                synthesize_photometry(self.lbda, self.variance,
                                          filter_lbda, filter_trans) if self.has_variance() \
                                          and on in ["data","rawdata"] else None
+
+    def reshape(self, new_lbda, kind="cubic"):
+        """ Create a copy of the current spectrum with a new wavelength shape.
+        Flux and variances (if any) will be reshaped accordingly
+    
+        This uses scipy.interpolate.interp1d
+
+        Parameters
+        ----------
+        new_lbda: [array]
+            new wavelength array (in Anstrom)
+
+        Returns
+        -------
+        Spectrum
+        """
+        from scipy.interpolate import interp1d
+        data_ = interp1d(self.lbda, self.data, kind=kind)(new_lbda)
+        var_  = interp1d(self.lbda, self.variance, kind=kind)(new_lbda) if self.has_variance() else None
+        return get_spectrum(new_lbda, data_, variance=var_, header=self.header.copy())
     
     # --------- #
     #  PLOTTER  #
@@ -712,25 +760,25 @@ class Cube( SpecSource ):
             hdul.append(hduVar)
         
         naxis = 3 if self.is_3d_cube() else 2
-        hduP.header.update('NAXIS',naxis)
+        hduP.header.set('NAXIS',naxis)
         if "lstep" in self.spec_prop.keys():
-            hduP.header.update('%s%d'%(self._build_properties["lengthkey"],naxis),self.spec_prop["lspix"])   
-            hduP.header.update('%s%d'%(self._build_properties["stepkey"],naxis),  self.spec_prop["lstep"])
-            hduP.header.update('%s%d'%(self._build_properties["startkey"],naxis), self.spec_prop["lstart"])
+            hduP.header.set('%s%d'%(self._build_properties["lengthkey"],naxis), self.spec_prop["lspix"])   
+            hduP.header.set('%s%d'%(self._build_properties["stepkey"],naxis),   self.spec_prop["lstep"])
+            hduP.header.set('%s%d'%(self._build_properties["startkey"],naxis),  self.spec_prop["lstart"])
         else:
             hdul.append(pf.ImageHDU(self.lbda, name='LBDA'))
     
         if self.is_3d_cube():
-            hduP.header.update('%s1'%self._build_properties["lengthkey"],self.spec_prop["wspix"])
-            hduP.header.update('%s2'%self._build_properties["lengthkey"],self.spec_prop["nspix"])  
-            hduP.header.update('%s1'%self._build_properties["stepkey"],self.spec_prop["wstep"])
-            hduP.header.update('%s2'%self._build_properties["stepkey"],self.spec_prop["nstep"])
-            hduP.header.update('%s1'%self._build_properties["startkey"],self.spec_prop["wstart"])
-            hduP.header.update('%s2'%self._build_properties["startkey"],self.spec_prop["nstart"])
+            hduP.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop["wspix"])
+            hduP.header.set('%s2'%self._build_properties["lengthkey"],self.spec_prop["nspix"])  
+            hduP.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop["wstep"])
+            hduP.header.set('%s2'%self._build_properties["stepkey"],self.spec_prop["nstep"])
+            hduP.header.set('%s1'%self._build_properties["startkey"],self.spec_prop["wstart"])
+            hduP.header.set('%s2'%self._build_properties["startkey"],self.spec_prop["nstart"])
         else:
-            hduP.header.update('%s1'%self._build_properties["lengthkey"],self.spec_prop.get("wspix", len(self.rawdata.T)))
-            hduP.header.update('%s1'%self._build_properties["stepkey"],self.spec_prop.get("wstep", 1))
-            hduP.header.update('%s1'%self._build_properties["startkey"],self.spec_prop.get("wstart",0))
+            hduP.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop.get("wspix", len(self.rawdata.T)))
+            hduP.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop.get("wstep", 1))
+            hduP.header.set('%s1'%self._build_properties["startkey"],self.spec_prop.get("wstart",0))
             hdul.append(pf.ImageHDU([v for i,v in self.spaxel_mapping.items()], name='MAPPING'))
             hdul.append(pf.ImageHDU([i for i,v in self.spaxel_mapping.items()], name='SPAX_ID'))
             hdul.append(pf.ImageHDU(self.spaxel_vertices, name='SPAX_VERT'))
@@ -739,7 +787,7 @@ class Cube( SpecSource ):
             #hdul.append(pf.ImageHDU([v for i,v in self.spaxel_mapping.items()], name='E3D_GRP'))
             
         hdulist = pf.HDUList(hdul)
-        hdulist.writeto(savefile,clobber=force)
+        hdulist.writeto(savefile,overwrite=force)
         
 
     def load(self, filename, dataindex=0, headerindex=None):
@@ -817,7 +865,7 @@ class Cube( SpecSource ):
     # --------- #
     #  SLICES   #
     # --------- #
-    def get_slice(self, lbda_min, lbda_max, usemean=False):
+    def get_slice(self, lbda_min, lbda_max, usemean=True, data="data"):
         """ Returns a array containing the [weighted] average for the 
         spaxels within the given range.
         
@@ -832,6 +880,11 @@ class Cube( SpecSource ):
             If the cube has a variance, the slice will be the weighted mean (weighted by inverse of variance) 
             of the slice value within the wavelength range except if 'usemean' is set to True. 
             In that case, the mean (and not weigthed mean) will be used.
+            
+        data: [string] -optional-
+            Variable that will be used.
+            If `data`  do not contains 'data' in its name usemean will be forced to False.
+            Do not change this is you have a doubt.
 
         Returns
         -------
@@ -839,31 +892,85 @@ class Cube( SpecSource ):
         """
         if lbda_min is None: lbda_min = self.lbda[0]
         if lbda_max is None: lbda_max = self.lbda[-1]
+            
+        if lbda_min>lbda_max: lbda_min,lbda_max = np.sort([lbda_min,lbda_max])
+            
         flagin = (self.lbda>=lbda_min)*(self.lbda<=lbda_max)
         flagin = np.asarray(flagin, dtype="bool")
+        if 'data' not in data: usemean=False
+        
         if not self.has_variance() or usemean:
-            return np.asarray([np.nanmean(self.get_index_data(i, data="data")[flagin])
+            return np.asarray([np.nanmean(self.get_index_data(i, data=data)[flagin])
                                    for i in range(self.nspaxels)])
         else:
-            return np.asarray([np.average(self.get_index_data(i, data="data")[flagin],
+            return np.asarray([np.average(self.get_index_data(i, data=data)[flagin],
                                     weights=1./self.get_index_data(i, data="variance")[flagin])
                                    for i in range(self.nspaxels)])
                 
     # --------- #
     #  SPAXEL   #
     # --------- #
-    def get_sorted_spectra(self,lbda_range=None,
+    # - GET SPECTRUM
+    def get_spectrum(self, index, data="data", usemean=False):
+        """ Return a Spectrum object based on the given index
+        If index is a list of indexes, the mean spectrum will be returned.
+        (see xy_to_index to convert 2D coordinates into index)
+
+        Parameters
+        ----------
+        index: [int, list of]
+            index (or list of index) for which you want a spectrum.
+            If a list is given, the returned spectrum will be the average spectrum.
+
+        data: [string] -optional-
+            Which attribute of the cube will be considered as the 'data' of the cube?
+
+        usemean: [bool] -optional-
+            If several indexes are given, the mean spectrum will be returned.
+            If the variance is available, the weighted (1/variance) average will be used
+            to combine spectra except if `usemean` is True. In that case, the simple mean 
+            will be used.
+
+        Returns
+        -------
+        Spectrum
+        """
+        spec = Spectrum(None)
+
+        data_ = self.get_index_data(index,data)
+        variance = self.get_index_data(index,data="variance") if self.has_variance() and "data" in data else None
+        
+        if hasattr(index,"__iter__"):
+            # multiple indexes
+            if not usemean and variance is not None:
+                data_ = np.average(data_, weights = 1./np.asarray(variance), axis=0)
+            else:
+                data_ = np.nanmean(data_, axis=0)
+                
+            if variance is not None:
+                variance = np.nanmean(variance, axis=0) / len(index)
+
+        spec.create(data=data_, variance=variance, header=None, lbda=self.lbda)
+        return spec
+    
+    # - SORTING TOOLS
+    def get_sorted_spectra(self, lbda_range=None, data="data",
                                descending=False,
-                               avoid_area=None,avoid_spaxel=None):
-        """ Returns the brightness-sorted spaxel Coordinate.
+                               avoid_area=None, avoid_indexes=None, 
+                               **kwargs):
+        """ Returns the brightness-sorted spaxel indexes.
 
         Parameters
         ----------
         lbda_range: [2D array / None] -optional-
             This enable to define a weavelength zone where the brightness
             will be defined. If None, full wavelength. if None in any upper 
-            or lower bound, (i.e. [None, X]) no upper or lower restriction
+            or lower bound, (i.e. [None, x]) no upper or lower restriction
             respectively.
+
+        data: [string] -optional-
+            Attribute that will be looked at to build the slice used to sort 
+            the spaxels.
 
         descending: [bool] -optional-
             True:  Brightest -> Faintest
@@ -873,189 +980,143 @@ class Cube( SpecSource ):
             You can avoid an space of the Cube by defining here a position 
             (x,y) and a radius. avoid_area must be (x,y,r). 
             All spaxel inthere will be avoided in the spaxel sorting 
-            (considered as Nan). 
             If None, nothing will be avoided this way. 
 
-        avoid_spaxel: [N*2D-array/None] 
-            You can set a list of sapxel coords [[sp1_x,sp1_y],[]...] these 
+        avoid_indexes: [array/None] 
+            You can set a list of spaxel coords [idx_1, idx_2,...] these 
             spaxels will be avoided in the spaxel sorting (considered as Nan).
             If None, nothing will be avoided this way.
-                                    
+            NB: see the xy_to_index() method to convert x,y, coords into indexes
+                        
+        **kwargs goes to get_slice(): e.g. usemean
+
         Returns
         -------
-        N*[X,Y] where N is the amount of spaxel (X,Y in imshow coords)
+        list of indexes (if nan, they are at the end)
         """
+        from scipy.spatial import distance
+        
         # ------------------- #
-        # -- Input checked -- #
+        #    Input checked    #
         # ------------------- #
         if lbda_range is None:
-            lbda_range = [None,None]
-            
+            lbda_range = [None,None]  
         # - user gave a wrong input
-        if len(lbda_range) != 2:
+        elif len(lbda_range) != 2:
             raise ValueError("`lbda_range` must be None or a 2D array")
-
-        if lbda_range[0] is None:
-            lbda_range[0] = 0
-            
-        if lbda_range[1] is None:
-            lbda_range[1] = 1e6
-
-        # --------------------------- #
-        # -- Lets sort the spaxels -- #
-        # --------------------------- #
-        sorting_flag = (self.lbda >= lbda_range[0]) & (self.lbda <= lbda_range[1])
-        # -- this is the flat-list of brightness sorted spaxel
-        # -- One Has to handle the nan otherwise argsort (and family) wont work
         
-        sum_data    = np.sum(self.data[sorting_flag],axis=0)
-        # -- If there is spaxel we do not want to considere
-        avoidance_mask = np.ones(np.shape(sum_data))
+        # ------------------- #
+        #  Data To be Sorted  #
+        # ------------------- #        
+        mean_data   = self.get_slice(lbda_range[0],lbda_range[1], data=data, **kwargs)
+        if descending:
+            mean_data *=-1
+            
+        # ------------------- #
+        #   Avoidance Area    #
+        # ------------------- #
+        avoid_indexes = [] if avoid_indexes is None else np.asarray(avoid_indexes).tolist()
+            
         # -- Avoidance Area
         if avoid_area is not None and len(avoid_area) == 3:
-            x,y,r2 = avoid_area[0],avoid_area[1],avoid_area[2]**2 # to save cpu
-            for i in range(np.shape(sum_data)[0]):
-                for j in range(np.shape(sum_data)[1]):
-                    if ((i-x)**2 + (j-y)**2) <r2:
-                        avoidance_mask[j,i] = np.NaN
+            x,y,rad_ = avoid_area[0],avoid_area[1],avoid_area[2] # to save cpu
+            dist_ = distance.cdist([[x,y]],np.asarray(self.index_to_xy(self.indexes)))[0]
+            avoid_indexes = avoid_indexes+np.asarray(np.where(dist_<0)).flatten().tolist()
+            
+        # ------------------- #
+        #   Actual Sorting    #
+        # ------------------- #
+        return [i for i in np.argsort(mean_data) if i not in avoid_indexes]
+        
+
+    def get_brightest_spaxels(self, nspaxels, lbda_range=None, data="data",
+                               avoid_area=None, avoid_indexes=None, 
+                               **kwargs):
+        """ Returns the `nspaxel`-brightness spaxel indexes.
+
+        Parameters
+        ----------
+        nspaxels: [int]
+            Number of spaxel indexes to be returned
+
+        
+        lbda_range: [2D array / None] -optional-
+            This enable to define a weavelength zone where the brightness
+            will be defined. If None, full wavelength. if None in any upper 
+            or lower bound, (i.e. [None, x]) no upper or lower restriction
+            respectively.
+
+        data: [string] -optional-
+            Attribute that will be looked at to build the slice used to sort 
+            the spaxels.
+                       
+        avoid_area: [3-floats/None] -optional-
+            You can avoid an space of the Cube by defining here a position 
+            (x,y) and a radius. avoid_area must be (x,y,r). 
+            All spaxel inthere will be avoided in the spaxel sorting 
+            If None, nothing will be avoided this way. 
+
+        avoid_indexes: [array/None] 
+            You can set a list of spaxel coords [idx_1, idx_2,...] these 
+            spaxels will be avoided in the spaxel sorting (considered as Nan).
+            If None, nothing will be avoided this way.
+            NB: see the xy_to_index() method to convert x,y, coords into indexes
                         
-        # -- Avoided Spaxel
-        if avoid_spaxel is not None:
-            for sp in avoid_spaxel: # tested
-                avoidance_mask[sp[0],sp[1]] = np.NaN
-
-        sum_data    = sum_data*avoidance_mask
-        # ------ Cleaned data
-        
-        flat_data   = np.concatenate(sum_data)
-        flagnan     = (flat_data!=flat_data)
-        argslist    = np.argsort(flat_data[-flagnan])
-        
-        maxrank     = np.nanmax(argslist)
-        # -- Which sorting ?
-        if descending:
-            ranked = np.asarray([maxrank-np.argwhere(argslist==i)[0][0] for i in range(maxrank+1)])
-        else:
-            ranked = np.asarray([np.argwhere(argslist==i)[0][0] for i in range(maxrank+1)])
-        
-        # -- Fancy Insert
-        nanindex = 0
-        index_nan = np.argwhere(flagnan==True).T[0]
-        full_rank = np.ones(len(flat_data))*np.NaN
-        for i in range(len(flat_data)):
-            if i in index_nan:
-                nanindex += 1
-            else:
-                full_rank[i] = ranked[i-nanindex]
-        
-        # -- spaxel_1d_to_2d
-        array2d = np.ones((self._w_spix,self._n_spix))
-        for i in range(self._w_spix):
-            for j in range(self._n_spix):
-                if full_rank[j+self._w_spix*i] <0:
-                    array2d[i,j] = np.NaN
-                else:
-                    array2d[i,j] = full_rank[j+self._w_spix*i]
-                    
-        return array2d
-
-    def get_brightest_spaxels(self,nspaxel,lbda_range=None,
-                                  avoid_area=None,avoid_spaxel=None):
-        """ get the coordinates of the brightnest spaxel of the cube
-
-        Parameters
-        ----------
-        nspaxel: [int]
-            Number of spaxels you want.
-        
-        lbda_range: [2D array / None] -optional-
-            This enable to define a weavelength zone where the brightness
-            will be defined. If None, full wavelength. if None in any upper 
-            or lower bound, (i.e. [None, X]) no upper or lower restriction
-            respectively.
-                       
-        avoid_area: [3-floats/None] -optional-
-            You can avoid an space of the Cube by defining here a position 
-            (x,y) and a radius. avoid_area must be (x,y,r). 
-            All spaxel inthere will be avoided in the spaxel sorting 
-            (considered as Nan). 
-            If None, nothing will be avoided this way. 
-
-        avoid_spaxel: [N*2D-array/None] 
-            You can set a list of sapxel coords [[sp1_x,sp1_y],[]...] these 
-            spaxels will be avoided in the spaxel sorting (considered as Nan).
-            If None, nothing will be avoided this way.
+        **kwargs goes to get_slice(): e.g. usemean
 
         Returns
         -------
-        list of spaxel coordinates
+        list of indexes (if nan, they are at the end)
         """
-        spaxelsrank = self.get_sorted_spectra(lbda_range=lbda_range,
-                                              avoid_area=avoid_area,
-                                              avoid_spaxel=avoid_spaxel,
-                                              descending=True)
+        return self.get_sorted_spectra(lbda_range=lbda_range,
+                                        avoid_area=avoid_area,
+                                        avoid_indexes=avoid_indexes,
+                                        descending=True,**kwargs)[:nspaxels]
             
-        return np.asarray([np.argwhere(spaxelsrank==i)[0] for i in range(nspaxel)])
     
-    def get_faintest_spaxels(self,nspaxel,lbda_range=None,
-                               avoid_area=None,avoid_spaxel=None):
-        """ get the coordinates of the faintest spaxel of the cube
+    def get_faintest_spaxels(self, nspaxels, lbda_range=None, data="data",
+                               avoid_area=None, avoid_indexes=None, 
+                               **kwargs):
+        """ Returns the `nspaxel`-brightness spaxel indexes.
 
         Parameters
         ----------
-        nspaxel: [int]
-            Number of spaxels you want.
+        nspaxels: [int]
+            Number of spaxel indexes to be returned
+
         
         lbda_range: [2D array / None] -optional-
             This enable to define a weavelength zone where the brightness
             will be defined. If None, full wavelength. if None in any upper 
-            or lower bound, (i.e. [None, X]) no upper or lower restriction
+            or lower bound, (i.e. [None, x]) no upper or lower restriction
             respectively.
+
+        data: [string] -optional-
+            Attribute that will be looked at to build the slice used to sort 
+            the spaxels.
                        
         avoid_area: [3-floats/None] -optional-
             You can avoid an space of the Cube by defining here a position 
             (x,y) and a radius. avoid_area must be (x,y,r). 
             All spaxel inthere will be avoided in the spaxel sorting 
-            (considered as Nan). 
             If None, nothing will be avoided this way. 
 
-        avoid_spaxel: [N*2D-array/None] 
-            You can set a list of sapxel coords [[sp1_x,sp1_y],[]...] these 
+        avoid_indexes: [array/None] 
+            You can set a list of spaxel coords [idx_1, idx_2,...] these 
             spaxels will be avoided in the spaxel sorting (considered as Nan).
             If None, nothing will be avoided this way.
+            NB: see the xy_to_index() method to convert x,y, coords into indexes
+                        
+        **kwargs goes to get_slice(): e.g. usemean
 
         Returns
         -------
-        list of spaxel coordinates
+        list of indexes (if nan, they are at the end)
         """
-        spaxelsrank = self.get_sorted_spectra(lbda_range=lbda_range,
-                                              avoid_area=avoid_area,
-                                              avoid_spaxel=avoid_spaxel,
-                                              descending=False)
-            
-        return np.asarray([np.argwhere(spaxelsrank==i)[0] for i in range(nspaxel)])
-
-    def get_spectrum(self, index):
-        """ Return a Spectrum object based on the given index
-        If index is a list of indexes, the mean spectrum will be returned.
-        (see xy_to_index to convert 2D coordinates into index)
-        Returns
-        -------
-        Spectrum
-        """
-        spec = Spectrum(None)
-
-        data = self.get_index_data(index)
-        variance = self.get_index_data(index,data="variance") if self.has_variance() else None
-        
-        if hasattr(index,"__iter__"):
-            # multiple indexes
-            data = np.average(data, weights = 1./np.asarray(variance) if self.has_variance() else None,axis=0)
-            if variance is not None:
-                variance = np.mean(variance, axis=0) / len(index)
-
-        spec.create(data=data, variance=variance, header=None, lbda=self.lbda)
-        return spec
+        return self.get_sorted_spectra(lbda_range=lbda_range,
+                                        avoid_area=avoid_area,
+                                        avoid_indexes=avoid_indexes,
+                                        descending=False,**kwargs)[:nspaxels]
     
     # -------------- #
     # Manage 3D e3D  #
@@ -1114,32 +1175,62 @@ class Cube( SpecSource ):
     # -------------- #
     #  Manipulation  #
     # -------------- #
-    def remove_flux(self,flux):
+    def remove_flux(self, flux, remove_from="rawdata"):
         """
-        = This enalble to remove the given flux to all the
-          spaxels of the cube. =
+        This enalble to remove the given flux to all the
+        spaxels of the cube.
+        
+        This is set to `data`
 
-        flux: [array]              The input flux that will be removed.
+        Parameters
+        ----------
+        flux: [array]              
+            The input flux that will be removed.
 
-        = RETURNS =
-        Void, affects the object (fluxes)
+        Returns
+        -------
+        Void, affects the object (data, variance)
         """
         if len(flux) != len(self.lbda):
             raise ValueError("The given `spec` must have the size as the wavelength array")
 
-        for w in range(self._w_spix):
-            for n in range(self._n_spix):
-                if (self.data.T[n,w] == 0).all():
-                    continue
-                self.data.T[n,w] -= flux
+        self._derived_properties["data"] = np.asarray(eval("self.%s.T"%(remove_from)) - flux).T
+        
+    def scale_by(self, coef):
+        """ divide the data by the given scaling factor 
+        If this object has a variance attached, the variance will be divided by the square of `coef`.
+        Parameters
+        ----------
+        coef: [float or array of]
+            scaling factor for the data 
+
+        Returns
+        -------
+        Void, affect the object (data, variance)
+        """
+        if not hasattr(coef,"__iter__") or len(coef)==1 or len(coef) == self.data.shape[1]:
             
+            self._derived_properties["data"]  = self.data / coef
+            if self.has_variance():
+                self._properties["variance"]  = self.variance / coef**2
+                
+        elif len(coef) == self.data.shape[0]:
+            self._derived_properties["data"]  = np.asarray(self.data.T / coef).T
+            if self.has_variance():
+                self._properties["variance"]  = np.asarray(self.variance.T / coef**2).T
+        else:
+            raise ValueError("scale_by is not able to parse the shape of coef.", np.shape(coef), self.data.shape)
+            
+        
     # ================================ #
     # ==     External Tools         == #
     # ================================ #
     def show(self, toshow="data",
                  interactive=False,
                  savefile=None, ax=None, show=True,
-                 show_meanspectrum=True, cmap=None,**kwargs):
+                 show_meanspectrum=True, cmap=None,
+                 vmin=None, vmax=None, 
+                 **kwargs):
         """ Display the cube.
         
         Parameters
@@ -1147,8 +1238,8 @@ class Cube( SpecSource ):
         toshow: [string] -optional-
             Variable you want to display. anything accessible as self.`toshow` that 
             has the same size as the wavelength. 
-            If toshow is data or rawdata, the variance will automatically be added
-            if it exists.
+            If toshow is data or rawdata (or anything containing 'data'), 
+            the variance will automatically be added if it exists.
             Do not change this is you have a doubt.
             
         interactive: [bool] -optional- 
@@ -1158,6 +1249,14 @@ class Cube( SpecSource ):
         cmap: [matplotlib colormap] -optional-
             Colormap used for the wavelength integrated cube (imshow).
 
+        vmin, vmax: [float /string / None] -optional-
+            Lower and upper value for the colormap. 
+            3 Formats are available:
+            - float: Value in data unit
+            - string: percentile. Give a float (between 0 and 100) in string format.
+                      This will be converted in float and passed to numpy.percentile
+            - None: The default will be used (percentile 0.5 and 99.5 percent respectively).
+            (NB: vmin and vmax are independent, i.e. one can be None and the other '98' for instance)
         show_meanspectrum: [bool] -optional-
             If True both a wavelength integrated cube (imshow) and the average spectrum 
             will be displayed. If not, only the wavelength integrated cube (imshow) will.
@@ -1187,8 +1286,8 @@ class Cube( SpecSource ):
         """
         if interactive:
             from .mplinteractive import InteractiveCube
-            iplot = InteractiveCube(self,fig=None, axes=ax)
-            iplot.launch()
+            iplot = InteractiveCube(self,fig=None, axes=ax, toshow=toshow)
+            iplot.launch(vmin=vmin, vmax=vmax)
             return iplot
 
         # - Not interactive
@@ -1212,7 +1311,7 @@ class Cube( SpecSource ):
             fig  = axim.figure
 
         # - Ploting
-        self._display_im_(axim, toshow, cmap=cmap, **kwargs)
+        self._display_im_(axim, toshow, cmap=cmap, vmin=vmin, vmax=vmax, **kwargs)
         self._display_spec_(axspec, toshow,  **kwargs)
         if show_meanspectrum:
             axspec.text(0.03,0.95, "Mean Spectrum", transform=axspec.transAxes,
@@ -1226,7 +1325,8 @@ class Cube( SpecSource ):
     # Internal  #
     # --------- #
     def _display_im_(self, axim, toshow="data", cmap=None,
-                    lbdalim=None, interactive=False, **kwargs):
+                    lbdalim=None, interactive=False,
+                     vmin=None, vmax=None, **kwargs):
         """ """
         if axim is None:
             return
@@ -1241,8 +1341,8 @@ class Cube( SpecSource ):
         from matplotlib import patches
         # - which colors
         colors = self._data_to_color_(toshow, cmap=cmap, lbdalim=lbdalim,
-                                      vmin = kwargs.pop("vmin",None),
-                                      vmax = kwargs.pop("vmax",None))
+                                      vmin = vmin,
+                                      vmax = vmax)
         # - The Patchs
         ps = [patches.Polygon(self.spaxel_vertices+np.asarray(self.index_to_xy(id_)),
                         facecolor=colors[i], alpha=0.8,**kwargs) for i,id_  in enumerate(self.indexes)]
@@ -1251,7 +1351,7 @@ class Cube( SpecSource ):
         return ip
 
     def _data_to_color_(self, toshow="data", lbdalim=None,
-                        cmap=None, vmin=None, vmax=None):
+                        cmap=None, vmin=None, vmax=None, **kwargs):
         """ Convert the given data into colors.
         This will convert the `data` -> [0,1] scale and then
         feed that to the matplotlib colormap.
@@ -1266,25 +1366,43 @@ class Cube( SpecSource ):
             - None: No limit
             - [min/None ; max/None] lower or upper limit (or None if None)
         
+        vmin, vmax: [float /string / None]
+            Upper and lower value for the colormap. 3 Format are available
+            - float: Value in data unit
+            - string: percentile. Give a float (between 0 and 100) in string format.
+                      This will be converted in float and passed to numpy.percentile
+            - None: The default will be used (percentile 0.5 and 99.5 percent respectively).
+            (NB: vmin and vmax are independent, i.e. one can be None and the other '98' for instance)
+            
         cmap: [matplotlib colormap] -optional-
             If None, viridis will be used.
-
+        
+        **kwargs  goes to get_slice(): e.g. usemean
         Returns
         -------
-        RGBA array (len of `data`
+        RGBA array (len of `data`)
         """
+        # - value limits 
         if lbdalim is None:
             lbdalim = [None,None]
         elif np.shape(lbdalim) != (2,):
             raise TypeError("lbdalim must be None or [min/max]")
-        else:
-            lbdalim = np.sort(lbdalim)
-            
-        mean_flux = self.get_slice(lbdalim[0], lbdalim[1], usemean=False)
-        if vmin is None: vmin = np.nanmin(mean_flux)
-        if vmax is None: vmax = np.nanmax(mean_flux)
+        
+        # - Scaling used
+        mean_flux = self.get_slice(lbdalim[0], lbdalim[1], data=toshow, **kwargs)
+        
+        # - vmin / vmax trick
+        vmin = np.nanpercentile(mean_flux, 0.5) if vmin is None else \
+          np.nanpercentile(mean_flux, float(vmin)) if type(vmin) == str else\
+          vmin
+        vmax = np.nanpercentile(mean_flux, 99.5) if vmax is None else \
+          np.nanpercentile(mean_flux, float(vmax)) if type(vmax) == str else\
+          vmax
+          
+        # - colormap used
         if cmap is None: cmap = mpl.cm.viridis
-        return cmap( (mean_flux-vmin)/(vmax-vmin))
+            
+        return cmap( (mean_flux-vmin)/(vmax-vmin) )
         
     def _display_spec_(self, axspec, toshow="data", **kwargs):
         """ """
@@ -1292,11 +1410,11 @@ class Cube( SpecSource ):
             if self.is_3d_cube():
                 spec = np.nanmean(np.concatenate(eval("self.%s"%toshow).T), axis=0)
                 var  = np.nanmean(np.concatenate(self.variance.T), axis=0) / np.prod(self.data.shape[1:]) \
-                  if toshow is not ["variance"] and self.has_variance() else None
+                  if 'data' in toshow and self.has_variance() else None
             else:
                 spec = np.nanmean(eval("self.%s"%toshow).T, axis=0)
                 var  = np.nanmean(self.variance.T, axis=0) / np.prod(self.data.shape[1:]) \
-                  if toshow is not ["variance"] and self.has_variance() else None
+                  if 'data' in toshow and self.has_variance() else None
             axspec.specplot(self.lbda, spec, var=var)
             
         

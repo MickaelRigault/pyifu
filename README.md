@@ -18,6 +18,7 @@ python setup.py install
 
 ### Dependencies
 - propobject (install automatically if you used pip otherwise `pip install propobject`)
+- astropy >= 1.3
 
 # Usage
 To load a Spectrum file:
