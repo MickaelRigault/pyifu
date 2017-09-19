@@ -170,7 +170,7 @@ class SpecSource( BaseObject ):
     # -------- #
     def create(self,data,header=None,
                     variance=None,
-                    lbda=None):
+                    lbda=None, logwave=None):
         """  High level setting method.
 
         Parameters
@@ -193,14 +193,20 @@ class SpecSource( BaseObject ):
             (step, size and start values). 
             N.B: You can always use set_lbda() later on.
 
+        logwave: [None / bool] -optional-
+            If the wavelength given in log of wavelength. 
+            If you known set True (= given in log) or False (= given in angstrom)
+            If let to None, this will test if the first wavelength is smaller or 
+            higher than a default number (50).
+
         Returns
         -------
         Void
         """
         self.set_header(header)
-        self.set_data(data, variance, lbda)
+        self.set_data(data, variance, lbda, logwave=logwave)
 
-    def set_data(self, data, variance=None, lbda=None):
+    def set_data(self, data, variance=None, lbda=None, logwave=None):
         """ Set the spectral data 
 
         Parameters
@@ -217,6 +223,12 @@ class SpecSource( BaseObject ):
             This is not mendatory if the header contains this information
             (step, size and start values). 
             N.B: You can always use set_lbda() later on.
+            
+        logwave: [None / bool] -optional-
+            If the wavelength given in log of wavelength. 
+            If you known set True (= given in log) or False (= given in angstrom)
+            If let to None, this will test if the first wavelength is smaller or 
+            higher than a default number (50).
 
         Returns
         -------
@@ -232,9 +244,9 @@ class SpecSource( BaseObject ):
             
         # - Wavelength
         if lbda is not None:
-            self.set_lbda(lbda)
+            self.set_lbda(lbda, logwave=logwave)
 
-    def set_lbda(self, lbda):
+    def set_lbda(self, lbda, logwave=None):
         """ Set the wavelength associated with the data.
         
         Parameters
@@ -256,7 +268,13 @@ class SpecSource( BaseObject ):
             
             - Array with non constant step: This array will simply 
               be saved as is in self.lbda. 
-                    
+                  
+        logwave: [None / bool] -optional-
+            If the wavelength given in log of wavelength. 
+            If you known set True (= given in log) or False (= given in angstrom)
+            If let to None, this will test if the first wavelength is smaller or 
+            higher than a default number (50).
+
         Returns
         -------
         Void
@@ -267,7 +285,7 @@ class SpecSource( BaseObject ):
         # - unique step array?
         if len(np.unique(np.round(lbda[1:]-lbda[:-1], decimals=4)))==1:
             # slower and a bit convoluted but ensure class' consistency
-            self._lbda_to_header_(lbda)
+            self._lbda_to_header_(lbda, logwave)
             self._properties["lbda"] = self._lbda_from_header_()
         else:
             self._properties["lbda"] = np.asarray(lbda)
@@ -357,9 +375,9 @@ class SpecSource( BaseObject ):
             return None
         
         return np.arange(self.spec_prop["lspix"]) * self.spec_prop["lstep"] + self.spec_prop["lstart"] \
-          if self.spec_prop["lstart"] > 50 else np.exp(np.arange(self.spec_prop["lspix"]) * self.spec_prop["lstep"] + self.spec_prop["lstart"])
+          if not self.spec_prop["logwave"] else np.exp(np.arange(self.spec_prop["lspix"]) * self.spec_prop["lstep"] + self.spec_prop["lstart"])
 
-    def _lbda_to_header_(self, lbda):
+    def _lbda_to_header_(self, lbda, logwave=None):
         """ converts the lbda array into step, size and start and feed it to
         spec_prop
 
@@ -370,6 +388,7 @@ class SpecSource( BaseObject ):
         self.spec_prop["lstep"]  = np.unique(lbda[1:]-lbda[:-1])[0]
         self.spec_prop["lspix"]  = len(lbda)
         self.spec_prop["lstart"] = lbda[0]
+        self.spec_prop["logwave"] = (self.spec_prop["lstart"] < 50) if logwave is None else bool(logwave)
         
     # -----------
     # - internal    
@@ -576,6 +595,7 @@ class Spectrum( SpecSource ):
         self.spec_prop["lspix"]  = self.header.get('%s1'%self._build_properties["lengthkey"])
         self.spec_prop["lstep"]  = self.header.get('%s1'%self._build_properties["stepkey"])
         self.spec_prop["lstart"] = self.header.get('%s1'%self._build_properties["startkey"])
+        self.spec_prop["logwave"]= self.header.get('logwave', None)
 
 ##############################
 #                            #
@@ -1434,6 +1454,7 @@ class Cube( SpecSource ):
     
     def _header_to_spec_prop_(self):
         """ """
+        self.spec_prop["logwave"]= self.header.get('logwave', None)
         if self.header.get("NAXIS") ==2:
             self.spec_prop["wspix"]  = self.header.get('%s1'%self._build_properties["lengthkey"])
             self.spec_prop["lspix"]  = self.header.get('%s2'%self._build_properties["lengthkey"])

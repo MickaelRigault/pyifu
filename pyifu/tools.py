@@ -46,13 +46,6 @@ def ipython_info():
 # ================== #
 
     
-
-
-
-
-
-
-    
 @make_method(mpl.Axes)
 def specplot(ax,x,y,var=None,
              color=None,bandprop={},
