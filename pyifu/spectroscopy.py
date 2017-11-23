@@ -448,7 +448,7 @@ class Spectrum( SpecSource ):
             hdul.append(pf.ImageHDU(self.lbda, name='LBDA'))
                 
         hdulist = pf.HDUList(hdul)
-        hdulist.writeto(savefile,clobber=force)
+        hdulist.writeto(savefile,overwrite=force)
 
     def load(self, filename, dataindex=0, varianceindex=1, headerindex=None):
         """ 
@@ -464,7 +464,7 @@ class Spectrum( SpecSource ):
         if headerindex is None:
             headerindex = dataindex
             
-        # Get the data
+        # Get the data 
         data = self.fits[dataindex].data
         
         # Get the variance or the error
@@ -608,6 +608,8 @@ class Cube( SpecSource ):
     In there, there is just the basic method.
     """
     PROPERTIES = ["spaxel_mapping","spaxel_vertices"]
+    SIDE_PROPERTIES = ["adr"]
+    
     # ================ #
     #  Main Method     #
     # ================ #
@@ -947,10 +949,10 @@ class Cube( SpecSource ):
 
         usemean: [bool] -optional-
             If several indexes are given, the mean spectrum will be returned.
-            If the variance is available, the weighted (1/variance) average will be used
-            to combine spectra except if `usemean` is True. In that case, the simple mean 
-            will be used.
-
+            If the variance is available and does not contains NaN, the weighted (1/variance)
+            average will be used to combine spectra except if `usemean` is True. 
+            In that case, the simple mean will be used.
+        
         Returns
         -------
         Spectrum
@@ -962,7 +964,7 @@ class Cube( SpecSource ):
         
         if hasattr(index,"__iter__"):
             # multiple indexes
-            if not usemean and variance is not None:
+            if not usemean and variance is not None and not np.isnan(variance).any():
                 data_ = np.average(data_, weights = 1./np.asarray(variance), axis=0)
             else:
                 data_ = np.nanmean(data_, axis=0)
@@ -1474,7 +1476,43 @@ class Cube( SpecSource ):
             self.spec_prop["wstart"] = self.header.get('%s1'%self._build_properties["startkey"])
             self.spec_prop["nstart"] = self.header.get('%s2'%self._build_properties["startkey"])
             self.spec_prop["lstart"] = self.header.get('%s3'%self._build_properties["startkey"])
+    # -----------
+    # Side Prop
+    @property
+    def adr(self):
+        """ If loaded (see load_adr) if object contains the methods to get the evolution 
+        of a sky position as a function of wavelength accounting for 
+        atmospherical differential refraction (ADR) """
+        return self._side_properties["adr"]
+    
+    def load_adr(self, airmass,  parangle, temperature, relathumidity,
+                     pressure=630, lbdaref=5000):
+        """ 
+        airmass: [float]
+            Airmass of the target
 
+        parangle: [float]
+            Parralactic angle in degree
+
+        temperature: [float]
+            temperature in Celcius
+            
+        relathumidity: [float <100]
+            Relative Humidity in %
+            
+        pressure: [float] -optional- 
+            Air pressure in mbar
+            
+        lbdaref: [float] -optional-
+            Reference wavelength, the position shift will be given as a function 
+            of this wavelength.
+        
+        """
+        from .adr import get_adr
+        self._side_properties["adr"] = \
+          get_adr(airmass=airmass, parangle=parangle,
+                      temperature=temperature, relathumidity=relathumidity,
+                     pressure=pressure, lbdaref=lbdaref)
     # -----------
     # - internal
     @property

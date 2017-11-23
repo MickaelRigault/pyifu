@@ -85,6 +85,9 @@ def specplot(ax,x,y,var=None,
         
     return pl,fill
 
+
+
+
 @make_method(mpl.Figure)
 def figout(fig,savefile=None,show=True,add_thumbnails=False,
            dpi=200):

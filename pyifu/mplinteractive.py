@@ -7,9 +7,7 @@ import matplotlib
 from matplotlib import patches
 import matplotlib.pyplot as mpl
 
-from propobject import BaseObject
-
-from .spectroscopy import Cube
+from propobject    import BaseObject
 from .tools        import kwargs_update
 
 
