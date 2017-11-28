@@ -120,7 +120,7 @@ class InteractiveCube( BaseObject ):
     # ============================== #
     #  Low Level Connection Magic    #
     # ============================== #
-    def launch(self, **kwargs):
+    def launch(self, notebook=None, **kwargs):
         """ """
         from .tools import ipython_info
         if not self.has_figure():
@@ -144,8 +144,9 @@ class InteractiveCube( BaseObject ):
                               
                               key_press_event      = self.interact_presskey,
                               key_release_event    = self.inteact_releasekey)
-        
-        if ipython_info() == "notebook":
+        if notebook is None:
+            notebook = ipython_info() == "notebook"
+        if notebook:
             self.fig.show()
         else:
             mpl.show()

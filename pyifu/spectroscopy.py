@@ -1315,7 +1315,7 @@ class Cube( SpecSource ):
                  interactive=False,
                  savefile=None, ax=None, show=True,
                  show_meanspectrum=True, cmap=None,
-                 vmin=None, vmax=None, 
+                 vmin=None, vmax=None, notebook=None,
                  **kwargs):
         """ Display the cube.
         
@@ -1364,6 +1364,11 @@ class Cube( SpecSource ):
         show: [bool] -optional-
             If you do not save the data (see savefile), shall the plot be shown?
 
+        notebook: [bool or None] -optional-
+            Is this running from a notebook? 
+            If True, the plot will be made using fig.show() if not with mpl.show()
+            If None, this will try to guess.
+
         **kwargs goes to matplotlib's imshow 
 
         Returns
@@ -1373,7 +1378,7 @@ class Cube( SpecSource ):
         if interactive:
             from .mplinteractive import InteractiveCube
             iplot = InteractiveCube(self,fig=None, axes=ax, toshow=toshow)
-            iplot.launch(vmin=vmin, vmax=vmax)
+            iplot.launch(vmin=vmin, vmax=vmax,notebook=notebook)
             return iplot
 
         # - Not interactive
