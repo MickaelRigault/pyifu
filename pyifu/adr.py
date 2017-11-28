@@ -65,7 +65,8 @@ class ADR( BaseObject ):
     # =================== #
     #   Methods           #
     # =================== #
-    def refract(self, x, y, lbda, backward=False, unit=1., **kwargs):
+    def refract(self, x, y, lbda, backward=False, unit=1.,
+                    **kwargs):
         """If forward (default), return refracted position(s) at
         wavelength(s) *lbda* [Å] from reference position(s) *x*,*y*
         (in units of *unit* in arcsec).  Return shape is

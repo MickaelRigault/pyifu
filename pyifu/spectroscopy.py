@@ -586,7 +586,7 @@ class Spectrum( SpecSource ):
         # - out
         fig.figout(savefile=savefile, show=show)
         
-        return pl
+        return {"plot":pl, "ax":ax, "fig":fig}
     # ================ #
     #  Properties      #
     # ================ #
@@ -773,7 +773,7 @@ class Cube( SpecSource ):
         from astropy.io import fits as pf
         hdul = []
         # -- Data saving
-        hduP = pf.PrimaryHDU(self.data, pf.header.Header())
+        hduP = pf.PrimaryHDU(self.data, header=self.header)
         hdul.append(hduP)
     
         if self.has_variance():
@@ -1029,7 +1029,7 @@ class Cube( SpecSource ):
         
         # ------------------- #
         #  Data To be Sorted  #
-        # ------------------- #        
+        # ------------------- #
         mean_data   = self.get_slice(lbda_range[0],lbda_range[1], data=data, **kwargs)
         if descending:
             mean_data *=-1
@@ -1044,13 +1044,13 @@ class Cube( SpecSource ):
             x,y,rad_ = avoid_area[0],avoid_area[1],avoid_area[2] # to save cpu
             dist_ = distance.cdist([[x,y]],np.asarray(self.index_to_xy(self.indexes)))[0]
             avoid_indexes = avoid_indexes+np.asarray(np.where(dist_<0)).flatten().tolist()
-            
+        # -- NaNs to avoid too
+        #avoid_nans = [i for i in self.indexes if np.any(np.isnan(self.data[i]))]
         # ------------------- #
         #   Actual Sorting    #
         # ------------------- #
         return [i for i in np.argsort(mean_data) if i not in avoid_indexes]
         
-
     def get_brightest_spaxels(self, nspaxels, lbda_range=None, data="data",
                                avoid_area=None, avoid_indexes=None, 
                                **kwargs):
@@ -1139,6 +1139,71 @@ class Cube( SpecSource ):
                                         avoid_area=avoid_area,
                                         avoid_indexes=avoid_indexes,
                                         descending=False,**kwargs)[:nspaxels]
+
+    def get_spaxels_within_polygon(self, polygon, inclusive=True):
+        """ Returns the spaxel within the given polygon. 
+        (this uses fraction_of_spaxel_within_polygon, 
+        which given a weight between 0 and 1
+        corresponding to the fraction of a given spaxel 
+        contains within the polygon: 0 out, 1 all in)
+        
+        = This method uses the Shapely library =
+
+        Parameters
+        ----------
+        polygon: [Shapely's Polygon]
+            Are the spaxels within this polygon?
+        
+        inclusive: [bool] -optional-
+            If a spaxel is partially within the polygon (weight<1), what to do:
+            True: It is returned
+            False: It is not returned
+
+        Returns
+        -------
+        list of indexes
+        """
+        w = fraction_of_spaxel_within_polygon(polygon)
+        if inclusive:
+            return np.asarray(self.indexes[np.asarray(w, dtype="bool")]).tolist()
+        return np.asarray(self.indexes[np.asarray(np.asarray(w, dtype="int"), dtype="bool")]).tolist()
+        
+        
+    def fraction_of_spaxel_within_polygon(self, polygon):
+        """ get the fraction of spaxel overlapping with the given polygon
+        0 means all out and 1 means all in
+        
+        Parameters
+        ----------
+        polygon: [Shapely's Polygon]
+            Are the spaxels within this polygon?
+        
+        Returns
+        -------
+        array of float between 0 and 1
+        """
+        try:
+            from shapely.vectorized import contains
+            from shapely.geometry   import Polygon
+        except ImportError:
+            raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
+        
+        
+        polyvert  = np.asarray([verts for verts in np.asarray([self.spaxel_vertices+np.asarray(self.index_to_xy(id_)) for id_ in self.indexes])])
+        # xs and ys are the x and y coordinates of all the vertices
+        xs, yx    = polyvert.T
+        spaxel_edges_in = contains(polygon, xs,yx)
+        # flagin
+        flagin    = np.any(spaxel_edges_in, axis=0)
+        flagallin = np.all(spaxel_edges_in, axis=0)
+        flagpartial = flagin * ~flagallin
+        # fraction of the 
+        weights_in = np.zeros(self.nspaxels)
+        weights_in[flagallin] = 1
+        spaxels_area = Polygon(self.spaxel_vertices).area
+        weights_in[flagpartial] = [polygon.intersection(Polygon(vert_partial)).area/spaxels_area for vert_partial in np.asarray(polyvert[flagpartial])]
+        
+        return weights_in
     
     # -------------- #
     # Manage 3D e3D  #
@@ -1153,7 +1218,6 @@ class Cube( SpecSource ):
 
         return eval("self.%s.T[index]"%data)
         
-            
     def index_to_xy(self, index):
         """ Each spaxel has a unique index (1d-array) entry.
         This tools enables to know what is the 2D (x,y) position 
