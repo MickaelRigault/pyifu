@@ -33,6 +33,9 @@ def load_spectrum(filename,**kwargs):
     """
     return Spectrum(filename, **kwargs)
 
+def load_slice(filename, **kwargs):
+    """ """
+    return Slice(filename, **kwargs)
 
 def get_spectrum(lbda, flux, variance=None, header=None):
     """ Create a spectrum from the given data
@@ -58,6 +61,23 @@ def get_spectrum(lbda, flux, variance=None, header=None):
     spec = Spectrum(None)
     spec.create(data=flux, variance=variance, header=None, lbda=lbda)
     return spec
+
+def get_slice(data, xy, spaxel_vertices=None,
+                variance=None, indexes=None, lbda=None):
+    """ """
+    slice_ = Slice(None)
+    if indexes is None:
+        indexes = np.arange(len(xy))
+    if len(data) != len(xy):
+        raise ValueError("xy and data do not have the same lenth %d vs. %d"%(len(xy), len(data)))
+    
+    spaxel_mapping = {id_:xy_ for id_,xy_ in zip(indexes,xy)}
+
+    slice_.create(data, variance=variance, lbda=lbda,spaxel_mapping=spaxel_mapping)
+    if spaxel_vertices is not None:
+        slice_.set_spaxel_vertices(spaxel_vertices)
+        
+    return slice_
 
 def synthesize_photometry(lbda, flux, filter_lbda, filter_trans,
                           normed=True):
@@ -602,18 +622,14 @@ class Spectrum( SpecSource ):
 #   Cubes                    #
 #                            #
 ##############################
-class Cube( SpecSource ):
-    """
-    This Class is the basic class upon which the other Cube will be based.
-    In there, there is just the basic method.
-    """
+class SpaxelHandler( SpecSource ):
+    """ """
     PROPERTIES = ["spaxel_mapping","spaxel_vertices"]
-    SIDE_PROPERTIES = ["adr"]
-    
+
     # ================ #
     #  Main Method     #
     # ================ #
-    def create(self,data,header=None,
+    def create(self,data ,header=None,
                     variance=None,
                     lbda=None, spaxel_mapping=None):
         """  High level setting method.
@@ -781,13 +797,13 @@ class Cube( SpecSource ):
                       pf.ImageHDU(self.variance, name='VARIANCE') 
             hdul.append(hduVar)
         
-        naxis = 3 if self.is_3d_cube() else 2
+        naxis = 3 if self.is_3d_cube() else len(np.shape(self.data))
         hduP.header.set('NAXIS',naxis)
         if "lstep" in self.spec_prop.keys():
             hduP.header.set('%s%d'%(self._build_properties["lengthkey"],naxis), self.spec_prop["lspix"])   
             hduP.header.set('%s%d'%(self._build_properties["stepkey"],naxis),   self.spec_prop["lstep"])
             hduP.header.set('%s%d'%(self._build_properties["startkey"],naxis),  self.spec_prop["lstart"])
-        else:
+        elif self.lbda is not None:
             hdul.append(pf.ImageHDU(self.lbda, name='LBDA'))
     
         if self.is_3d_cube():
@@ -797,10 +813,12 @@ class Cube( SpecSource ):
             hduP.header.set('%s2'%self._build_properties["stepkey"],self.spec_prop["nstep"])
             hduP.header.set('%s1'%self._build_properties["startkey"],self.spec_prop["wstart"])
             hduP.header.set('%s2'%self._build_properties["startkey"],self.spec_prop["nstart"])
-        else:
+        elif naxis==2:
             hduP.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop.get("wspix", len(self.rawdata.T)))
             hduP.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop.get("wstep", 1))
             hduP.header.set('%s1'%self._build_properties["startkey"],self.spec_prop.get("wstart",0))
+            
+        if naxis<3:
             hdul.append(pf.ImageHDU([v for i,v in self.spaxel_mapping.items()], name='MAPPING'))
             hdul.append(pf.ImageHDU([i for i,v in self.spaxel_mapping.items()], name='SPAX_ID'))
             hdul.append(pf.ImageHDU(self.spaxel_vertices, name='SPAX_VERT'))
@@ -857,7 +875,7 @@ class Cube( SpecSource ):
 
         # = Spaxel Positions
         naxis = self.fits[headerindex].header.get("NAXIS",None)
-        if naxis is not None and naxis ==2:
+        if naxis is not None and naxis <3:
             # euro3d format
             mapping = [f.data for f in self.fits if f.name.upper() in ["MAPPING", "POS"]]
             indexes = [f.data for f in self.fits if f.name.upper() in ["INDEXES","SPAX_ID"]]
@@ -883,6 +901,211 @@ class Cube( SpecSource ):
         # --- Create the object
         self.create(data=data, header=self.fits[headerindex].header,
                     variance=variance, lbda=lbda, spaxel_mapping=spaxel_mapping)
+
+
+
+    def fraction_of_spaxel_within_polygon(self, polygon):
+        """ get the fraction of spaxel overlapping with the given polygon
+        0 means all out and 1 means all in
+        
+        Parameters
+        ----------
+        polygon: [Shapely's Polygon]
+            Are the spaxels within this polygon?
+        
+        Returns
+        -------
+        array of float between 0 and 1
+        """
+        try:
+            from shapely.vectorized import contains
+            from shapely.geometry   import Polygon
+        except ImportError:
+            raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
+        
+        
+        polyvert  = np.asarray([verts for verts in np.asarray([self.spaxel_vertices+np.asarray(self.index_to_xy(id_)) for id_ in self.indexes])])
+        # xs and ys are the x and y coordinates of all the vertices
+        xs, yx    = polyvert.T
+        spaxel_edges_in = contains(polygon, xs,yx)
+        # flagin
+        flagin    = np.any(spaxel_edges_in, axis=0)
+        flagallin = np.all(spaxel_edges_in, axis=0)
+        flagpartial = flagin * ~flagallin
+        # fraction of the 
+        weights_in = np.zeros(self.nspaxels)
+        weights_in[flagallin] = 1
+        spaxels_area = Polygon(self.spaxel_vertices).area
+        weights_in[flagpartial] = [polygon.intersection(Polygon(vert_partial)).area/spaxels_area for vert_partial in np.asarray(polyvert[flagpartial])]
+        
+        return weights_in
+
+    def index_to_xy(self, index):
+        """ Each spaxel has a unique index (1d-array) entry.
+        This tools enables to know what is the 2D (x,y) position 
+        of this index
+
+        Returns
+        -------
+        [int,int] (x,y)
+        """
+        if hasattr(index,"__iter__"):
+            return [self.index_to_xy(index_) for index_ in index]
+        
+        if index in self.spaxel_mapping:
+            return self.spaxel_mapping[index]
+        return None, None
+    
+    def xy_to_index(self, xy):
+        """ Each spaxel has a unique x,y, location that 
+        can be converted into a unique index (1d-array) entry.
+        This tools enables to know what is the index corresponding to the given
+        2D (x,y) position.
+        
+        Parameters
+        ----------
+        xy: [2d array]
+            x and y position(s) in the following structure:
+            [x,y] or [[x0,y0],[x1,y1]]
+
+        Returns
+        -------
+        list of indexes 
+        """
+        # - Following set_spaxels_mapping, v are list
+        # make sure xy too:
+        xy = np.asarray(xy).tolist()
+        if np.shape(xy) == (2,):
+            return [i for i,v in self.spaxel_mapping.items() if v == xy]
+        return [i for i,v in self.spaxel_mapping.items() if np.any(v in xy)]
+
+    # =================== #
+    #   Properties        #
+    # =================== #
+    def is_3d_cube(self):
+        """ """
+        return len(self.data.shape) == 3
+
+    @property
+    def spaxel_mapping(self):
+        """ dictionary containing the connection between spaxel index (int) and spaxel position (x,y)"""
+        if self._properties["spaxel_mapping"] is None:
+            self._properties["spaxel_mapping"] = {}
+        return self._properties["spaxel_mapping"]
+    
+    def _header_to_spec_prop_(self):
+        """ """
+        self.spec_prop["logwave"]= self.header.get('logwave', None)
+        if self.header.get("NAXIS") ==2:
+            self.spec_prop["wspix"]  = self.header.get('%s1'%self._build_properties["lengthkey"])
+            self.spec_prop["lspix"]  = self.header.get('%s2'%self._build_properties["lengthkey"])
+            self.spec_prop["wstep"]  = self.header.get('%s1'%self._build_properties["stepkey"])
+            self.spec_prop["lstep"]  = self.header.get('%s2'%self._build_properties["stepkey"])
+            self.spec_prop["wstart"] = self.header.get('%s1'%self._build_properties["startkey"])
+            self.spec_prop["lstart"] = self.header.get('%s2'%self._build_properties["startkey"])
+        else:            
+            self.spec_prop["wspix"]  = self.header.get('%s1'%self._build_properties["lengthkey"])
+            self.spec_prop["nspix"]  = self.header.get('%s2'%self._build_properties["lengthkey"])
+            self.spec_prop["lspix"]  = self.header.get('%s3'%self._build_properties["lengthkey"])
+
+            self.spec_prop["wstep"]  = self.header.get('%s1'%self._build_properties["stepkey"])
+            self.spec_prop["nstep"]  = self.header.get('%s2'%self._build_properties["stepkey"])
+            self.spec_prop["lstep"]  = self.header.get('%s3'%self._build_properties["stepkey"])
+
+            self.spec_prop["wstart"] = self.header.get('%s1'%self._build_properties["startkey"])
+            self.spec_prop["nstart"] = self.header.get('%s2'%self._build_properties["startkey"])
+            self.spec_prop["lstart"] = self.header.get('%s3'%self._build_properties["startkey"])
+
+    @property
+    def nspaxels(self):
+        """ Number of spaxel recorded in the spaxel mapping """
+        return len(self.spaxel_mapping)
+    
+    @property
+    def indexes(self):
+        """ Name/ID of the spaxels. (keys from spaxel_mapping)"""
+        return self.spaxel_mapping.keys() if self.spaxel_mapping is not None else []
+    
+    @property
+    def spaxel_mapping(self):
+        """ dictionary containing the connection between spaxel index (int) and spaxel position (x,y)"""
+        return self._properties["spaxel_mapping"]
+
+    @property
+    def spaxel_vertices(self):
+        """ The reference vertices for the spaxels. """
+        if self._properties["spaxel_vertices"] is None:
+            self.set_spaxel_vertices([[0.5, 0.5],[-0.5,0.5],[-0.5, -0.5],[0.5,-0.5]])
+        return self._properties["spaxel_vertices"]
+
+
+class Slice( SpaxelHandler ):
+    """ """
+    def show(self,  toshow="data",ax = None, savefile=None, show=True,
+                 vmin=None, vmax=None, show_colorbar=True,
+                 clabel="",cfontsize="large",
+                 **kwargs):
+        """ display on the IFU hexagonal grid the given values
+        
+        Parameters
+        ----------
+        """
+        from matplotlib import patches
+        from .tools import figout
+
+        # -- Let's go
+        if ax is None:
+            fig = mpl.figure(figsize=[6,5])
+            axim  = fig.add_subplot(111)
+        else:
+            fig = ax.figure
+
+        value = eval("self.%s"%toshow)
+        # - which colors
+        if vmin is None:
+            vmin = np.percentile(value,0)
+        elif type(vmin) == str:
+            vmin = np.percentile(value,float(vmin))
+        if vmax is None:
+            vmax = np.percentile(value,100)
+        elif type(vmax) == str:
+            vmax = np.percentile(value,float(vmax))
+                
+        colors = mpl.cm.viridis((value-vmin)/(vmax-vmin))
+        
+        x,y = np.asarray(self.index_to_xy(self.indexes)).T
+    
+        # - The Patchs
+        ps = [patches.Polygon(self.spaxel_vertices+np.asarray([x[i],y[i]]),
+                                facecolor=colors[i], alpha=0.8,**kwargs)
+              for i  in range(self.nspaxels)]
+        ip = [axim.add_patch(p_) for p_ in ps]
+        axim.autoscale(True, tight=True)
+
+            
+        if show_colorbar:
+            from .tools import colorbar, insert_ax
+            axcbar = axim.insert_ax("right", shrunk=0.88)
+            axcbar.colorbar(mpl.cm.viridis,vmin=vmin,vmax=vmax,label=clabel,
+                    fontsize=cfontsize)
+    
+        fig.figout(savefile=savefile, show=show)
+        
+    
+class Cube( SpaxelHandler ):
+    """
+    This Class is the basic class upon which the other Cube will be based.
+    In there, there is just the basic method.
+    """
+    SIDE_PROPERTIES = ["adr"]
+    
+    # ================ #
+    #  Main Method     #
+    # ================ #
+        
+    # -------- #
+    #   I/O    #
+    # -------- #
 
     # --------- #
     #  SLICES   #
@@ -1140,71 +1363,6 @@ class Cube( SpecSource ):
                                         avoid_indexes=avoid_indexes,
                                         descending=False,**kwargs)[:nspaxels]
 
-    def get_spaxels_within_polygon(self, polygon, inclusive=True):
-        """ Returns the spaxel within the given polygon. 
-        (this uses fraction_of_spaxel_within_polygon, 
-        which given a weight between 0 and 1
-        corresponding to the fraction of a given spaxel 
-        contains within the polygon: 0 out, 1 all in)
-        
-        = This method uses the Shapely library =
-
-        Parameters
-        ----------
-        polygon: [Shapely's Polygon]
-            Are the spaxels within this polygon?
-        
-        inclusive: [bool] -optional-
-            If a spaxel is partially within the polygon (weight<1), what to do:
-            True: It is returned
-            False: It is not returned
-
-        Returns
-        -------
-        list of indexes
-        """
-        w = fraction_of_spaxel_within_polygon(polygon)
-        if inclusive:
-            return np.asarray(self.indexes[np.asarray(w, dtype="bool")]).tolist()
-        return np.asarray(self.indexes[np.asarray(np.asarray(w, dtype="int"), dtype="bool")]).tolist()
-        
-        
-    def fraction_of_spaxel_within_polygon(self, polygon):
-        """ get the fraction of spaxel overlapping with the given polygon
-        0 means all out and 1 means all in
-        
-        Parameters
-        ----------
-        polygon: [Shapely's Polygon]
-            Are the spaxels within this polygon?
-        
-        Returns
-        -------
-        array of float between 0 and 1
-        """
-        try:
-            from shapely.vectorized import contains
-            from shapely.geometry   import Polygon
-        except ImportError:
-            raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
-        
-        
-        polyvert  = np.asarray([verts for verts in np.asarray([self.spaxel_vertices+np.asarray(self.index_to_xy(id_)) for id_ in self.indexes])])
-        # xs and ys are the x and y coordinates of all the vertices
-        xs, yx    = polyvert.T
-        spaxel_edges_in = contains(polygon, xs,yx)
-        # flagin
-        flagin    = np.any(spaxel_edges_in, axis=0)
-        flagallin = np.all(spaxel_edges_in, axis=0)
-        flagpartial = flagin * ~flagallin
-        # fraction of the 
-        weights_in = np.zeros(self.nspaxels)
-        weights_in[flagallin] = 1
-        spaxels_area = Polygon(self.spaxel_vertices).area
-        weights_in[flagpartial] = [polygon.intersection(Polygon(vert_partial)).area/spaxels_area for vert_partial in np.asarray(polyvert[flagpartial])]
-        
-        return weights_in
-    
     # -------------- #
     # Manage 3D e3D  #
     # -------------- #
@@ -1217,45 +1375,6 @@ class Cube( SpecSource ):
             return eval("self.%s.T[x,y]"%data)
 
         return eval("self.%s.T[index]"%data)
-        
-    def index_to_xy(self, index):
-        """ Each spaxel has a unique index (1d-array) entry.
-        This tools enables to know what is the 2D (x,y) position 
-        of this index
-
-        Returns
-        -------
-        [int,int] (x,y)
-        """
-        if hasattr(index,"__iter__"):
-            return [self.index_to_xy(index_) for index_ in index]
-        
-        if index in self.spaxel_mapping:
-            return self.spaxel_mapping[index]
-        return None, None
-    
-    def xy_to_index(self, xy):
-        """ Each spaxel has a unique x,y, location that 
-        can be converted into a unique index (1d-array) entry.
-        This tools enables to know what is the index corresponding to the given
-        2D (x,y) position.
-        
-        Parameters
-        ----------
-        xy: [2d array]
-            x and y position(s) in the following structure:
-            [x,y] or [[x0,y0],[x1,y1]]
-
-        Returns
-        -------
-        list of indexes 
-        """
-        # - Following set_spaxels_mapping, v are list
-        # make sure xy too:
-        xy = np.asarray(xy).tolist()
-        if np.shape(xy) == (2,):
-            return [i for i,v in self.spaxel_mapping.items() if v == xy]
-        return [i for i,v in self.spaxel_mapping.items() if np.any(v in xy)]
         
     
     # -------------- #
@@ -1512,39 +1631,6 @@ class Cube( SpecSource ):
     # =================== #
     #   Properties        #
     # =================== #
-    def is_3d_cube(self):
-        """ """
-        return len(self.data.shape) == 3
-
-    @property
-    def spaxel_mapping(self):
-        """ dictionary containing the connection between spaxel index (int) and spaxel position (x,y)"""
-        if self._properties["spaxel_mapping"] is None:
-            self._properties["spaxel_mapping"] = {}
-        return self._properties["spaxel_mapping"]
-    
-    def _header_to_spec_prop_(self):
-        """ """
-        self.spec_prop["logwave"]= self.header.get('logwave', None)
-        if self.header.get("NAXIS") ==2:
-            self.spec_prop["wspix"]  = self.header.get('%s1'%self._build_properties["lengthkey"])
-            self.spec_prop["lspix"]  = self.header.get('%s2'%self._build_properties["lengthkey"])
-            self.spec_prop["wstep"]  = self.header.get('%s1'%self._build_properties["stepkey"])
-            self.spec_prop["lstep"]  = self.header.get('%s2'%self._build_properties["stepkey"])
-            self.spec_prop["wstart"] = self.header.get('%s1'%self._build_properties["startkey"])
-            self.spec_prop["lstart"] = self.header.get('%s2'%self._build_properties["startkey"])
-        else:            
-            self.spec_prop["wspix"]  = self.header.get('%s1'%self._build_properties["lengthkey"])
-            self.spec_prop["nspix"]  = self.header.get('%s2'%self._build_properties["lengthkey"])
-            self.spec_prop["lspix"]  = self.header.get('%s3'%self._build_properties["lengthkey"])
-
-            self.spec_prop["wstep"]  = self.header.get('%s1'%self._build_properties["stepkey"])
-            self.spec_prop["nstep"]  = self.header.get('%s2'%self._build_properties["stepkey"])
-            self.spec_prop["lstep"]  = self.header.get('%s3'%self._build_properties["stepkey"])
-
-            self.spec_prop["wstart"] = self.header.get('%s1'%self._build_properties["startkey"])
-            self.spec_prop["nstart"] = self.header.get('%s2'%self._build_properties["startkey"])
-            self.spec_prop["lstart"] = self.header.get('%s3'%self._build_properties["startkey"])
     # -----------
     # Side Prop
     @property
@@ -1595,27 +1681,3 @@ class Cube( SpecSource ):
         if "nspix" not in self.spec_prop or self.spec_prop["nspix"] is None:
             self.spec_prop["nspix"] = np.shape(self.data)[2]
         return self.spec_prop["nspix"]
-
-    # ------------------
-    # Spaxel Structure
-    @property
-    def nspaxels(self):
-        """ Number of spaxel recorded in the spaxel mapping """
-        return len(self.spaxel_mapping)
-    @property
-    def indexes(self):
-        """ Name/ID of the spaxels. (keys from spaxel_mapping)"""
-        return self.spaxel_mapping.keys() if self.spaxel_mapping is not None else []
-    
-    @property
-    def spaxel_mapping(self):
-        """ dictionary containing the connection between spaxel index (int) and spaxel position (x,y)"""
-        return self._properties["spaxel_mapping"]
-
-    @property
-    def spaxel_vertices(self):
-        """ The reference vertices for the spaxels. """
-        if self._properties["spaxel_vertices"] is None:
-            self.set_spaxel_vertices([[0.5, 0.5],[-0.5,0.5],[-0.5, -0.5],[0.5,-0.5]])
-        return self._properties["spaxel_vertices"]
-        
