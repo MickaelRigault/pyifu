@@ -902,8 +902,34 @@ class SpaxelHandler( SpecSource ):
         self.create(data=data, header=self.fits[headerindex].header,
                     variance=variance, lbda=lbda, spaxel_mapping=spaxel_mapping)
 
+    def get_spaxels_within_polygon(self, polygon, inclusive=True):
+        """ Returns the spaxel within the given polygon. 
+        (this uses fraction_of_spaxel_within_polygon, 
+        which given a weight between 0 and 1
+        corresponding to the fraction of a given spaxel 
+        contains within the polygon: 0 out, 1 all in)
+        
+        = This method uses the Shapely library =
 
-
+        Parameters
+        ----------
+        polygon: [Shapely's Polygon]
+            Are the spaxels within this polygon?
+        
+        inclusive: [bool] -optional-
+            If a spaxel is partially within the polygon (weight<1), what to do:
+            True: It is returned
+            False: It is not returned
+ 
+        Returns
+        -------
+        list of indexes
+        """
+        w = self.fraction_of_spaxel_within_polygon(polygon)
+        if inclusive:
+            return np.asarray(self.indexes[np.asarray(w, dtype="bool")]).tolist()
+        return np.asarray(self.indexes[np.asarray(np.asarray(w, dtype="int"), dtype="bool")]).tolist()
+ 
     def fraction_of_spaxel_within_polygon(self, polygon):
         """ get the fraction of spaxel overlapping with the given polygon
         0 means all out and 1 means all in
@@ -1024,7 +1050,7 @@ class SpaxelHandler( SpecSource ):
     @property
     def indexes(self):
         """ Name/ID of the spaxels. (keys from spaxel_mapping)"""
-        return self.spaxel_mapping.keys() if self.spaxel_mapping is not None else []
+        return np.asarray(self.spaxel_mapping.keys()) if self.spaxel_mapping is not None else []
     
     @property
     def spaxel_mapping(self):
@@ -1110,17 +1136,23 @@ class Cube( SpaxelHandler ):
     # --------- #
     #  SLICES   #
     # --------- #
-    def get_slice(self, lbda_min, lbda_max, usemean=True, data="data"):
+    def get_slice(self, lbda_min=None, lbda_max=None, index=None,
+                      usemean=True, data="data",
+                      slice_object=False):
         """ Returns a array containing the [weighted] average for the 
         spaxels within the given range.
         
         
         Parameters
         ----------
-        lbda_min, lbda_max: [None or float]
+        lbda_min, lbda_max: [None or float] -required if not index-
             lower and higher boundaries of the wavelength (in Angstrom) defining the slice.
             None means no limit.
+            *Ignored if index provided*
             
+        index: [int] -optional-
+            Index of the cube slice you want. 
+
         usemean: [bool] -optional-
             If the cube has a variance, the slice will be the weighted mean (weighted by inverse of variance) 
             of the slice value within the wavelength range except if 'usemean' is set to True. 
@@ -1130,28 +1162,45 @@ class Cube( SpaxelHandler ):
             Variable that will be used.
             If `data`  do not contains 'data' in its name usemean will be forced to False.
             Do not change this is you have a doubt.
+            
+        slice_object: [bool] -optional-
+            Shall this returns a Slice object or jsut the corresponding data?
 
         Returns
         -------
         array of float
         """
-        if lbda_min is None: lbda_min = self.lbda[0]
-        if lbda_max is None: lbda_max = self.lbda[-1]
-            
-        if lbda_min>lbda_max: lbda_min,lbda_max = np.sort([lbda_min,lbda_max])
-            
-        flagin = (self.lbda>=lbda_min)*(self.lbda<=lbda_max)
-        flagin = np.asarray(flagin, dtype="bool")
-        if 'data' not in data: usemean=False
-        
-        if not self.has_variance() or usemean:
-            return np.asarray([np.nanmean(self.get_index_data(i, data=data)[flagin])
-                                   for i in range(self.nspaxels)])
+        if index is not None:
+            slice_data = eval("self.%s[%d]"%(data,index))
+            slice_var  = None if data not in ['data','rawdata'] or not self.has_variance()\
+              else eval("self.variance[%d]"%(index))
         else:
-            return np.asarray([np.average(self.get_index_data(i, data=data)[flagin],
-                                    weights=1./self.get_index_data(i, data="variance")[flagin])
-                                   for i in range(self.nspaxels)])
+            if lbda_min is None: lbda_min = self.lbda[0]
+            if lbda_max is None: lbda_max = self.lbda[-1]
                 
+            if lbda_min>lbda_max: lbda_min,lbda_max = np.sort([lbda_min,lbda_max])
+                
+            flagin = (self.lbda>=lbda_min)*(self.lbda<=lbda_max)
+            flagin = np.asarray(flagin, dtype="bool")
+            if 'data' not in data:
+                usemean = True
+            else:
+                slice_var = self.get_slice(lbda_min=lbda_min, lbda_max=lbda_min, index=None,
+                                            usemean=True, data="variance", slice_object=False)
+                
+            if not self.has_variance() or usemean:
+                slice_data = np.asarray([np.nanmean(self.get_index_data(i, data=data)[flagin])
+                                    for i in range(self.nspaxels)])
+            else:
+                slice_data = np.asarray([np.average(self.get_index_data(i, data=data)[flagin],
+                                        weights=1./self.get_index_data(i, data="variance")[flagin])
+                                    for i in range(self.nspaxels)])
+            
+        if not slice_object:
+            return slice_data
+
+        return get_slice(slice_data, self.index_to_xy(self.indexes), spaxel_vertices=self.spaxel_vertices, 
+                                 variance=slice_var, indexes=self.indexes, lbda=None)
     # --------- #
     #  SPAXEL   #
     # --------- #
