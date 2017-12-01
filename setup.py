@@ -11,7 +11,7 @@ MAINTAINER_EMAIL = 'mrigault@physik.hu-berlin.de'
 URL = 'https://github.com/MickaelRigault/pyifu'
 LICENSE = 'Apache 2.0'
 DOWNLOAD_URL = 'https://github.com/MickaelRigault/pyifu/0.5'
-VERSION = '0.5.4'
+VERSION = '0.5.5'
 
 try:
     from setuptools import setup, find_packages

@@ -387,6 +387,8 @@ class SpecSource( BaseObject ):
     @property
     def header(self):
         """ """
+        if self._side_properties['header'] is None:
+            self._side_properties["header"] = pf.header.Header()
         return self._side_properties["header"]
 
     def _lbda_from_header_(self):
@@ -410,6 +412,9 @@ class SpecSource( BaseObject ):
         self.spec_prop["lstart"] = lbda[0]
         self.spec_prop["logwave"] = (self.spec_prop["lstart"] < 50) if logwave is None else bool(logwave)
         
+        self.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop["lspix"])   
+        self.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop["lstep"])
+        self.header.set('%s1'%self._build_properties["startkey"],self.spec_prop["lstart"])
     # -----------
     # - internal    
     @property
@@ -428,18 +433,11 @@ class Spectrum( SpecSource ):
     # ================ #
     #  Main Method     #
     # ================ #
-    def writeto(self,savefile,force=True,saveerror=False):
-        """ Save the Spectrum into the given `savefile`
+    def _build_hdulist_(self, saveerror=False):
+        """ The fits hdulist that should be saved.
 
         Parameters
         ----------
-        savefile: [string]      
-            Fullpath of the file where the spectrum will be saved.
-
-        force: [bool] -optional-
-            If the file already exist, shall this overwrite it ? 
-            (hence erasing the former one)
-
         saveerror:  [bool]      
             Set this to True if you wish to record the error and not the variance
             in you first hdu-table. if False, the table will be called
@@ -467,7 +465,32 @@ class Spectrum( SpecSource ):
         else:
             hdul.append(pf.ImageHDU(self.lbda, name='LBDA'))
                 
-        hdulist = pf.HDUList(hdul)
+        return hdul
+        
+    def writeto(self, savefile, force=True, saveerror=False):
+        """ Save the Spectrum into the given `savefile`
+
+        Parameters
+        ----------
+        savefile: [string]      
+            Fullpath of the file where the spectrum will be saved.
+
+        force: [bool] -optional-
+            If the file already exist, shall this overwrite it ? 
+            (hence erasing the former one)
+
+        saveerror:  [bool]      
+            Set this to True if you wish to record the error and not the variance
+            in you first hdu-table. if False, the table will be called
+            VARIANCE and have self.v; if True, the table will be called
+            ERROR and have sqrt(self.v)
+
+        Returns
+        -------
+        Void
+        """
+        
+        hdulist = pf.HDUList(self._build_hdulist_(saveerror))
         hdulist.writeto(savefile,overwrite=force)
 
     def load(self, filename, dataindex=0, varianceindex=1, headerindex=None):
@@ -553,7 +576,28 @@ class Spectrum( SpecSource ):
         data_ = interp1d(self.lbda, self.data, kind=kind)(new_lbda)
         var_  = interp1d(self.lbda, self.variance, kind=kind)(new_lbda) if self.has_variance() else None
         return get_spectrum(new_lbda, data_, variance=var_, header=self.header.copy())
-    
+
+    def scale_by(self, coef):
+        """ divide the data by the given scaling factor 
+        If this object has a variance attached, the variance will be divided by the square of `coef`.
+        Parameters
+        ----------
+        coef: [float or array of]
+            scaling factor for the data 
+
+        Returns
+        -------
+        Void, affect the object (data, variance)
+        """
+        if not hasattr(coef,"__iter__") or len(coef)==1 or len(coef) == len(self.data):
+            
+            self._derived_properties["data"]  = self.data / coef
+            if self.has_variance():
+                self._properties["variance"]  = self.variance / coef**2
+        else:
+            raise ValueError("scale_by is not able to parse the shape of coef.", np.shape(coef))
+
+        
     # --------- #
     #  PLOTTER  #
     # --------- #
@@ -966,6 +1010,35 @@ class SpaxelHandler( SpecSource ):
         
         return weights_in
 
+    def get_aperture(self, x, y, radius,
+                    ell=None, theta=0, radius_min=None, **kwargs):
+        """ 
+        **kwargs goes to cube.get_slice
+
+        theta: [float] -optional-
+           Angle from the x-axis. [in radian]
+
+        radius_min:[float] - optional-
+            
+        """
+        try:
+            import shapely
+        except ImportError:
+            raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
+
+        # - Aperture per slice
+        aperture = shapely.geometry.Point(x,y).buffer(radius)
+        if radius_min is not None:
+            aperture = aperture.difference(shapely.geometry.Point(x,y).buffer(radius_min))
+            
+        if ell is not None or ell == 0:
+            aperture = shapely.affinity.scale( aperture, xfact=1, yfact=1-ell, origin="center")
+            aperture = shapely.affinity.rotate(aperture, theta, origin='center', use_radians=True)
+            
+        wmap  = self.fraction_of_spaxel_within_polygon(aperture)
+        return np.nansum(self.data*wmap), np.nansum(self.variance*wmap**2), np.nansum(wmap)
+    
+
     def index_to_xy(self, index):
         """ Each spaxel has a unique index (1d-array) entry.
         This tools enables to know what is the 2D (x,y) position 
@@ -1182,15 +1255,16 @@ class Cube( SpaxelHandler ):
                 
             flagin = (self.lbda>=lbda_min)*(self.lbda<=lbda_max)
             flagin = np.asarray(flagin, dtype="bool")
+            
             if 'data' not in data:
-                usemean = True
+                usemean   = True
+                slice_var = None
             else:
-                slice_var = self.get_slice(lbda_min=lbda_min, lbda_max=lbda_min, index=None,
-                                            usemean=True, data="variance", slice_object=False)
-                
+                slice_var = np.nanmean( eval("self.%s"%"variance")[flagin], axis=0)
+
             if not self.has_variance() or usemean:
                 slice_data = np.asarray([np.nanmean(self.get_index_data(i, data=data)[flagin])
-                                    for i in range(self.nspaxels)])
+                                             for i in range(self.nspaxels)])
             else:
                 slice_data = np.asarray([np.average(self.get_index_data(i, data=data)[flagin],
                                         weights=1./self.get_index_data(i, data="variance")[flagin])
