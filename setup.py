@@ -7,11 +7,11 @@ LONG_DESCRIPTION = """  Python library to manipulate Integral Field Unit (IFU) c
 DISTNAME = 'pyifu'
 AUTHOR = 'Mickael Rigault'
 MAINTAINER = 'Mickael Rigault' 
-MAINTAINER_EMAIL = 'mrigault@physik.hu-berlin.de'
+MAINTAINER_EMAIL = 'm.rigault@ipnl.in2p3.fr'
 URL = 'https://github.com/MickaelRigault/pyifu'
 LICENSE = 'Apache 2.0'
 DOWNLOAD_URL = 'https://github.com/MickaelRigault/pyifu/0.5'
-VERSION = '0.5.5'
+VERSION = '0.5.6'
 
 try:
     from setuptools import setup, find_packages

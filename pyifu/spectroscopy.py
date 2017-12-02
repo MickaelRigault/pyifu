@@ -459,9 +459,10 @@ class Spectrum( SpecSource ):
             hdul.append(hduVar)
             
         if self._has_spec_setup_():
-            hduVar.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop["lspix"])   
-            hduVar.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop["lstep"])
-            hduVar.header.set('%s1'%self._build_properties["startkey"],self.spec_prop["lstart"])
+            if self.has_variance():
+                hduVar.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop["lspix"])   
+                hduVar.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop["lstep"])
+                hduVar.header.set('%s1'%self._build_properties["startkey"],self.spec_prop["lstart"])
         else:
             hdul.append(pf.ImageHDU(self.lbda, name='LBDA'))
                 
@@ -635,8 +636,8 @@ class Spectrum( SpecSource ):
         from .tools import figout, specplot
         # - Axis definition
         if ax is None:
-            fig = mpl.figure(figsize=[9,3.5])
-            ax = fig.add_axes([0.10,0.15,0.5,0.75])
+            fig = mpl.figure(figsize=[6,4])
+            ax = fig.add_axes([0.15,0.15,0.8,0.75])
             ax.set_xlabel(r"Wavelength", fontsize="large")
             ax.set_ylabel(r"Flux", fontsize="large")
         else:

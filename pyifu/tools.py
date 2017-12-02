@@ -202,17 +202,19 @@ def specplot(ax,x,y,var=None,
     if color is not None:
         default_kwargs["color"] = color
     propplot = kwargs_update(default_kwargs,**kwargs)
+    label = propplot.pop("label","")
     # -- Plot 
-    pl = ax.plot(x,y,**propplot)
+    pl = ax.plot(x,y,label=label,**propplot)
     
     # -----------------------
     # - Properties of band
     if var is not None:
         default_band   = dict(
             color=propplot["color"],alpha=0.3,
-            zorder=3,label="_no_legend_"
-            )
+            zorder=3)
+        
         bandprop = kwargs_update(default_band,**bandprop)
+        bandprop["label"] = "_no_legend_"
         # -- Band
         if not err_onzero:
             fill = ax.fill_between(x,y+np.sqrt(var),y-np.sqrt(var),
