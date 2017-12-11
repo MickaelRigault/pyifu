@@ -24,6 +24,27 @@ def load_cube(filename,**kwargs):
     """
     return Cube(filename, **kwargs)
 
+def get_cube(data, header=None, variance=None,
+              lbda=None, spaxel_mapping=None,
+                spaxel_vertices=None):
+    """ 
+    Parameters
+    ----------
+    spaxel_mapping: [dict]
+        dictionary containing the coordinate of the spaxels with the given format:
+        {id_:xy_ for id_,xy_ in zip(indexes,xy)}
+        with xy_ the [x,y] coordinate of the id_-th index.
+        (index could simply be range(number_of_spaxels) 
+
+    """
+    cube = Cube(None)
+    cube.create(data, header=header, variance=variance,
+                    lbda=lbda, spaxel_mapping=spaxel_mapping)
+    if spaxel_vertices is not None:
+        cube.set_spaxel_vertices(spaxel_vertices)
+        
+    return cube
+
 def load_spectrum(filename,**kwargs):
     """ Load a Spectrum from the given filename 
     
@@ -64,7 +85,11 @@ def get_spectrum(lbda, flux, variance=None, header=None):
 
 def get_slice(data, xy, spaxel_vertices=None,
                 variance=None, indexes=None, lbda=None):
-    """ """
+    """ 
+    Parameters
+    ----------
+
+    """
     slice_ = Slice(None)
     if indexes is None:
         indexes = np.arange(len(xy))
@@ -674,7 +699,7 @@ class SpaxelHandler( SpecSource ):
     # ================ #
     #  Main Method     #
     # ================ #
-    def create(self,data ,header=None,
+    def create(self, data ,header=None,
                     variance=None,
                     lbda=None, spaxel_mapping=None):
         """  High level setting method.
@@ -1257,12 +1282,12 @@ class Cube( SpaxelHandler ):
             flagin = (self.lbda>=lbda_min)*(self.lbda<=lbda_max)
             flagin = np.asarray(flagin, dtype="bool")
             
-            if 'data' not in data:
+            if 'data' not in data or not self.has_variance():
                 usemean   = True
                 slice_var = None
             else:
                 slice_var = np.nanmean( eval("self.%s"%"variance")[flagin], axis=0)
-
+                
             if not self.has_variance() or usemean:
                 slice_data = np.asarray([np.nanmean(self.get_index_data(i, data=data)[flagin])
                                              for i in range(self.nspaxels)])
@@ -1321,6 +1346,41 @@ class Cube( SpaxelHandler ):
 
         spec.create(data=data_, variance=variance, header=None, lbda=self.lbda)
         return spec
+    
+    # - PARTIAL CUBE
+    def get_partial_cube(self, indexes, slice_id):
+        """ Get a subsample of the current cube.
+        The return cube will only contain the requested slices (spaxel positions) 
+        at the requested wavelengths
+
+        Parameters
+        ----------
+        indexes: [list or boolean-array]
+            Indexes (as in spaxel_mapping) of the spaxels you want to keep.
+
+        slice_id: [list or boolean-array]
+            Id (from 0->NLBDA) of the slices you want to keep
+            = Info this will be selected as self.lbda[slice_id] =
+
+        Returns
+        -------
+        Cube
+        """
+        spaxelsin = np.in1d(self.indexes, indexes)
+        data = self.data[slice_id].T[spaxelsin].T
+        if self.has_variance():
+            var = self.variance[slice_id].T[spaxelsin].T
+        else:
+            var = None
+
+        spaxel_mapping = {id_:self.spaxel_mapping[id_] for id_ in indexes}
+        copy_cube = self.copy()
+        copy_cube.create(data, variance=var, header=self.header,
+                        lbda=self.lbda[slice_id],
+                        spaxel_mapping=spaxel_mapping)
+        copy_cube.set_spaxel_vertices(self.spaxel_vertices)
+        
+        return copy_cube
     
     # - SORTING TOOLS
     def get_sorted_spectra(self, lbda_range=None, data="data",
