@@ -531,7 +531,7 @@ class Spectrum( SpecSource ):
             
             for l_,f_,v_ in zip(self.lbda, self.data, varerr_):
                 fileout.write("#%.1f %.3e %.3e\n"%(l_,f_,v_))
-            
+            fileout.close()
 
     def load(self, filename, dataindex=0, varianceindex=1, headerindex=None):
         """ 
