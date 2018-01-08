@@ -49,7 +49,7 @@ def ipython_info():
 # =  axes manipulation     = #
 # ========================== #
 @make_method(mpl.Axes)
-def insert_ax(ax,location,shrunk=0.7,space=.05,
+def insert_ax(ax, location, shrunk=0.7,space=.05,
               axspace=0.02,shareax=False,**kwargs):
     """ insert an axis at the requested location
 

@@ -129,7 +129,7 @@ class ADR( BaseObject ):
         """
         for k,v in kwargs.items():
             if k not in self.PROPERTIES:
-                raise ValueError("unknown property %s, it cannot be set. known properties are: ",", ".join(self.PROPERTIES))
+                raise ValueError("unknown property %s, it cannot be set. known properties are: "%k,", ".join(self.PROPERTIES))
             self._properties[k] = v
 
 

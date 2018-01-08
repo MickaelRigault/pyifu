@@ -493,7 +493,7 @@ class Spectrum( SpecSource ):
                 
         return hdul
         
-    def writeto(self, savefile, force=True, saveerror=False):
+    def writeto(self, savefile, force=True, saveerror=False, ascii=False):
         """ Save the Spectrum into the given `savefile`
 
         Parameters
@@ -511,13 +511,27 @@ class Spectrum( SpecSource ):
             VARIANCE and have self.v; if True, the table will be called
             ERROR and have sqrt(self.v)
 
+        ascii: [bool]
+            Save the current object as ascii data table:
+            - Starts with the header: #KEYWORD VALUE 
+            - Follows with the data: LBDA FLUX ERROR/VARIANCE [see saveerror]
+
         Returns
         -------
         Void
         """
-        
-        hdulist = pf.HDUList(self._build_hdulist_(saveerror))
-        hdulist.writeto(savefile,overwrite=force)
+        if not ascii:
+            hdulist = pf.HDUList(self._build_hdulist_(saveerror))
+            hdulist.writeto(savefile,overwrite=force)
+        else:
+            fileout = open(savefile.replace(".fits", ".txt"),"w")
+            for k,v in self.header.items():
+                fileout.write("#%s %s\n"%(k,v))
+            varerr_ = [np.nan] * len(self.lbda) if not self.has_variance() else self.variance if not saveerror else np.sqrt(self.variance)
+            
+            for l_,f_,v_ in zip(self.lbda, self.data, varerr_):
+                fileout.write("#%.1f %.3e %.3e\n"%(l_,f_,v_))
+            
 
     def load(self, filename, dataindex=0, varianceindex=1, headerindex=None):
         """ 
@@ -1227,6 +1241,59 @@ class Cube( SpaxelHandler ):
     # ================ #
     #  Main Method     #
     # ================ #
+    # -------- #
+    # Oper.    #
+    # -------- #
+    def _check_other_(self, other, kind="standard operation (add, div, sub etc.)"):
+        """ Raise a Type Error if other cannot to standard operatio """
+        if Cube not in other.__class__.__mro__:
+            raise TypeError("Cannot do %s between a cube with a non-Cube object"%kind)
+        if np.shape(self.data) != np.shape(other.data):
+            raise TypeError("Cannot do %kind between cubes with different data shape"%kind)
+        
+    def __add__(self, other):
+        """ """
+        self._check_other_(other, kind="addition")
+        
+        data = self.data + other.data
+        var1 = 0 if not self.has_variance() else self.variance
+        var2 = 0 if not other.has_variance() else other.variance
+        var  = np.sqrt(var1 + var2)
+        if len(np.atleast_1d(var)) == 1: var = None
+        return get_cube(data, lbda=self.lbda, variance=var, header=self.header,
+                        spaxel_mapping=spaxel_mapping,
+                        spaxel_vertices=self.spaxel_vertices)
+
+    def __sub__(self, other):
+        """ """
+        self._check_other_(other, kind="subtraction")
+        
+        data = self.data - other.data
+        var1 = 0 if not self.has_variance() else self.variance
+        var2 = 0 if not other.has_variance() else other.variance
+        var  = np.sqrt(var1 + var2)
+        if len(np.atleast_1d(var)) == 1: var = None
+        return get_cube(data, lbda=self.lbda, variance=var, header=self.header,
+                        spaxel_mapping=self.spaxel_mapping,
+                        spaxel_vertices=self.spaxel_vertices)
+
+    def __div__(self, other, kind="division"):
+        """ """
+        data = self.data / other.data
+        var1 = None if not self.has_variance() else self.variance
+        var2 = None if not other.has_variance() else other.variance
+        if var1 is None and var2 is None:
+            var = None
+        elif var1 is None:
+            var = var2
+        elif var2 is None:
+            var = var1
+        else:
+            var  = data*np.sqrt(self.data**2/var1 + other.data**2/var2)
+            
+        return get_cube(data, lbda=self.lbda, variance=var, header=self.header,
+                        spaxel_mapping=self.spaxel_mapping,
+                        spaxel_vertices=self.spaxel_vertices)
         
     # -------- #
     #   I/O    #
@@ -1367,7 +1434,7 @@ class Cube( SpaxelHandler ):
         Cube
         """
         spaxelsin = np.in1d(self.indexes, indexes)
-        data = self.data[slice_id].T[spaxelsin].T
+        rawdata = self.rawdata[slice_id].T[spaxelsin].T
         if self.has_variance():
             var = self.variance[slice_id].T[spaxelsin].T
         else:
@@ -1375,10 +1442,14 @@ class Cube( SpaxelHandler ):
 
         spaxel_mapping = {id_:self.spaxel_mapping[id_] for id_ in indexes}
         copy_cube = self.copy()
-        copy_cube.create(data, variance=var, header=self.header,
+        copy_cube.create(rawdata, variance=var, header=self.header,
                         lbda=self.lbda[slice_id],
                         spaxel_mapping=spaxel_mapping)
         copy_cube.set_spaxel_vertices(self.spaxel_vertices)
+        
+        # - If you removed a flux, rawdata != data
+        if self._derived_properties["data"] is not None:
+            copy_cube._derived_properties["data"] = self._derived_properties["data"][slice_id].T[spaxelsin].T
         
         return copy_cube
     
@@ -1597,7 +1668,7 @@ class Cube( SpaxelHandler ):
         -------
         Void, affect the object (data, variance)
         """
-        if not hasattr(coef,"__iter__") or len(coef)==1 or len(coef) == self.data.shape[1]:
+        if not hasattr(coef,"__iter__") or len(coef)==1 or len(coef) == self.data.shape[1] or np.shape(coef)==self.data.shape:
             
             self._derived_properties["data"]  = self.data / coef
             if self.has_variance():
