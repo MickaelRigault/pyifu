@@ -597,6 +597,24 @@ class Spectrum( SpecSource ):
                                          filter_lbda, filter_trans) if self.has_variance() \
                                          and on in ["data","rawdata"] else None
 
+
+    def filter(self, new_disp):
+        """ apply a Gaussian filtering to the current spectrum and returns a copy of the filtered one 
+
+        Parameters
+        ----------
+        new_disp: [float]
+            scale (sigma) of the filtering in pixel (lbda) unit.
+            
+        Returns 
+        -------
+        Spectrum
+        """
+        from scipy.ndimage.filters import gaussian_filter
+        data_ = gaussian_filter(self.data, new_disp)
+        var_  = gaussian_filter(self.var, new_disp) if self.has_variance() else None
+        return get_spectrum(self.lbda, data_, variance=var_, header=self.header.copy())
+        
     def reshape(self, new_lbda, kind="cubic"):
         """ Create a copy of the current spectrum with a new wavelength shape.
         Flux and variances (if any) will be reshaped accordingly
