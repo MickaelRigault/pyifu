@@ -2,15 +2,8 @@
 # -*- coding: utf-8 -*-
 import warnings
 import numpy as np
-import matplotlib.pyplot as mpl
-try:
-    from astropy.io import fits as pf
-except ImportError:
-    warnings.warn("You do not have astropy, you should. Using pyfits instead of astropy.io.fits")
-    import pyfits as pf
-    
-from propobject import BaseObject
 
+from propobject import BaseObject
 
 
 __all__ = ["load_cube","load_spectrum", "get_spectrum"]
@@ -340,11 +333,8 @@ class SpecSource( BaseObject ):
         """ Attach a header. 
         If the given header is None, an empty header will be attached.
         """
-        if header is None:
-            self._side_properties["header"] = pf.header.Header()
-        else:
-            self._side_properties["header"] = header
-            self._header_to_spec_prop_()
+        self._side_properties["header"] = header
+        self._header_to_spec_prop_()
             
     # =================== #
     #   Properties        #
@@ -413,7 +403,8 @@ class SpecSource( BaseObject ):
     def header(self):
         """ """
         if self._side_properties['header'] is None:
-            self._side_properties["header"] = pf.header.Header()
+            from astropy.io.fits import Header
+            self._side_properties["header"] = Header()
         return self._side_properties["header"]
 
     def _lbda_from_header_(self):
@@ -473,14 +464,15 @@ class Spectrum( SpecSource ):
         -------
         Void
         """
+        from astropy.io.fits import PrimaryHDU, ImageHDU
         hdul = []
         # -- Data saving
-        hdul.append(pf.PrimaryHDU(self.data, self.header))
+        hdul.append(PrimaryHDU(self.data, self.header))
         
         # -- Variance saving
         if self.has_variance():
-            hduVar  = pf.ImageHDU(np.sqrt(self.variance), name='ERROR') if saveerror else\
-              pf.ImageHDU(self.variance, name='VARIANCE')
+            hduVar  = ImageHDU(np.sqrt(self.variance), name='ERROR') if saveerror else\
+              ImageHDU(self.variance, name='VARIANCE')
             hdul.append(hduVar)
             
         if self._has_spec_setup_():
@@ -489,7 +481,7 @@ class Spectrum( SpecSource ):
                 hduVar.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop["lstep"])
                 hduVar.header.set('%s1'%self._build_properties["startkey"],self.spec_prop["lstart"])
         else:
-            hdul.append(pf.ImageHDU(self.lbda, name='LBDA'))
+            hdul.append(ImageHDU(self.lbda, name='LBDA'))
                 
         return hdul
         
@@ -521,7 +513,8 @@ class Spectrum( SpecSource ):
         Void
         """
         if not ascii:
-            hdulist = pf.HDUList(self._build_hdulist_(saveerror))
+            from astropy.io.fits import HDUList
+            hdulist = HDUList(self._build_hdulist_(saveerror))
             hdulist.writeto(savefile,overwrite=force)
         else:
             fileout = open(savefile.replace(".fits", ".txt"),"w")
@@ -541,8 +534,9 @@ class Spectrum( SpecSource ):
                the column will the used as lbda
         
         """
+        from astropy.io.fits import open as fitsopen
         self._side_properties["filename"] = filename
-        self._side_properties["fits"]     = pf.open(filename)
+        self._side_properties["fits"]     = fitsopen(filename)
         
         if headerindex is None:
             headerindex = dataindex
@@ -690,7 +684,7 @@ class Spectrum( SpecSource ):
         -------
         Void
         """
-        from .tools import figout, specplot
+        from .tools import figout, specplot, mpl
         # - Axis definition
         if ax is None:
             fig = mpl.figure(figsize=[6,4])
@@ -888,15 +882,15 @@ class SpaxelHandler( SpecSource ):
         -------
         Void
         """
-        from astropy.io import fits as pf
+        from astropy.io.fits import PrimaryHDU, ImageHDU, HDUList
         hdul = []
         # -- Data saving
-        hduP = pf.PrimaryHDU(self.data, header=self.header)
+        hduP = PrimaryHDU(self.data, header=self.header)
         hdul.append(hduP)
     
         if self.has_variance():
-            hduVar  = pf.ImageHDU(np.sqrt(self.variance), name='ERROR') if saveerror else\
-                      pf.ImageHDU(self.variance, name='VARIANCE') 
+            hduVar  = ImageHDU(np.sqrt(self.variance), name='ERROR') if saveerror else\
+                      ImageHDU(self.variance, name='VARIANCE') 
             hdul.append(hduVar)
         
         naxis = 3 if self.is_3d_cube() else len(np.shape(self.data))
@@ -906,7 +900,7 @@ class SpaxelHandler( SpecSource ):
             hduP.header.set('%s%d'%(self._build_properties["stepkey"],naxis),   self.spec_prop["lstep"])
             hduP.header.set('%s%d'%(self._build_properties["startkey"],naxis),  self.spec_prop["lstart"])
         elif self.lbda is not None:
-            hdul.append(pf.ImageHDU(self.lbda, name='LBDA'))
+            hdul.append(ImageHDU(self.lbda, name='LBDA'))
     
         if self.is_3d_cube():
             hduP.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop["wspix"])
@@ -921,14 +915,14 @@ class SpaxelHandler( SpecSource ):
             hduP.header.set('%s1'%self._build_properties["startkey"],self.spec_prop.get("wstart",0))
             
         if naxis<3:
-            hdul.append(pf.ImageHDU([v for i,v in self.spaxel_mapping.items()], name='MAPPING'))
-            hdul.append(pf.ImageHDU([i for i,v in self.spaxel_mapping.items()], name='SPAX_ID'))
-            hdul.append(pf.ImageHDU(self.spaxel_vertices, name='SPAX_VERT'))
+            hdul.append(ImageHDU([v for i,v in self.spaxel_mapping.items()], name='MAPPING'))
+            hdul.append(ImageHDU([i for i,v in self.spaxel_mapping.items()], name='SPAX_ID'))
+            hdul.append(ImageHDU(self.spaxel_vertices, name='SPAX_VERT'))
             # Spaxel Shape
-            #e3d_group = pf.PrimaryHDU(self.data, pf.header.Header())
-            #hdul.append(pf.ImageHDU([v for i,v in self.spaxel_mapping.items()], name='E3D_GRP'))
+            #e3d_group = PrimaryHDU(self.data, None)
+            #hdul.append(ImageHDU([v for i,v in self.spaxel_mapping.items()], name='E3D_GRP'))
             
-        hdulist = pf.HDUList(hdul)
+        hdulist = HDUList(hdul)
         hdulist.writeto(savefile,overwrite=force)
         
 
@@ -953,8 +947,9 @@ class SpaxelHandler( SpecSource ):
         
         
         """
+        from astropy.io.fits import open as fitsopen
         self._side_properties["filename"] = filename
-        self._side_properties["fits"]     = pf.open(filename)
+        self._side_properties["fits"]     = fitsopen(filename)
         
         if headerindex is None:
             headerindex = dataindex
@@ -1208,7 +1203,7 @@ class Slice( SpaxelHandler ):
         ----------
         """
         from matplotlib import patches
-        from .tools import figout
+        from .tools import figout, mpl
 
         # -- Let's go
         if ax is None:
@@ -1774,7 +1769,7 @@ class Cube( SpaxelHandler ):
             return iplot
 
         # - Not interactive
-        from .tools import figout, specplot
+        from .tools import figout, specplot, mpl
         # - Axis definition
         if ax is None:
             fig = mpl.figure(figsize= [6,5] if not show_meanspectrum else [10,3.5] )
@@ -1883,7 +1878,9 @@ class Cube( SpaxelHandler ):
           vmax
           
         # - colormap used
-        if cmap is None: cmap = mpl.cm.viridis
+        if cmap is None:
+            from matplotlib.pyplot import cm
+            cmap = cm.viridis
             
         return cmap( (mean_flux-vmin)/(vmax-vmin) )
         
