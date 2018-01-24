@@ -153,7 +153,7 @@ class InteractiveCube( BaseObject ):
         
     def interact_connect(self, **kwargs):
         """ More method that connect the event and the actions """
-        [self.fig.canvas.mpl_connect(key,val) for key,val in kwargs.iteritems()]
+        [self.fig.canvas.mpl_connect(key,val) for key,val in kwargs.items()]
 
 
     def set_to_origin(self):

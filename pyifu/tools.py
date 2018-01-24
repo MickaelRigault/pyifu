@@ -13,7 +13,7 @@ def kwargs_update(default,**kwargs):
     """
     """
     k = default.copy()
-    for key,val in kwargs.iteritems():
+    for key,val in kwargs.items():
         k[key] = val
         
     return k
