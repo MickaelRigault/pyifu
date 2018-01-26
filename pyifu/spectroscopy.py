@@ -137,6 +137,11 @@ def synthesize_photometry(lbda, flux, filter_lbda, filter_trans,
 
 
 
+# Not in .tools.py to avoid loading matplotlib.
+def is_arraylike(a):
+    """ Tests if 'a' is an array / list / tuple """
+    return isinstance(a, (list, tuple, np.ndarray) )
+
 ##########################
 #                        #
 # Low-Level SpecSource   #
@@ -641,7 +646,7 @@ class Spectrum( SpecSource ):
         -------
         Void, affect the object (data, variance)
         """
-        if not hasattr(coef,"__iter__") or len(coef)==1 or len(coef) == len(self.data):
+        if not is_arraylike(coef) or len(coef)==1 or len(coef) == len(self.data):
             
             self._derived_properties["data"]  = self.data / coef
             if self.has_variance():
@@ -1101,7 +1106,7 @@ class SpaxelHandler( SpecSource ):
         -------
         [int,int] (x,y)
         """
-        if hasattr(index,"__iter__"):
+        if is_arraylike(index):
             return [self.index_to_xy(index_) for index_ in index]
         
         if index in self.spaxel_mapping:
@@ -1414,7 +1419,7 @@ class Cube( SpaxelHandler ):
         data_ = self.get_index_data(index,data)
         variance = self.get_index_data(index,data="variance") if self.has_variance() and "data" in data else None
         
-        if hasattr(index,"__iter__"):
+        if is_arraylike(index):
             # multiple indexes
             if not usemean and variance is not None and not np.isnan(variance).any():
                 data_ = np.average(data_, weights = 1./np.asarray(variance), axis=0)
@@ -1637,7 +1642,7 @@ class Cube( SpaxelHandler ):
     def get_index_data(self, index, data="data"):
         """ Return the `data` corresponding the the ith index """
         if self.is_3d_cube():
-            if hasattr(index,"__iter__"):
+            if is_arraylike(index):
                 return [self.get_index_data(index_,data=data) for index_ in index]
             x,y = self.index_to_xy(index)
             return eval("self.%s.T[x,y]"%data)
@@ -1681,7 +1686,7 @@ class Cube( SpaxelHandler ):
         -------
         Void, affect the object (data, variance)
         """
-        if not hasattr(coef,"__iter__") or len(coef)==1 or len(coef) == self.data.shape[1] or np.shape(coef)==self.data.shape:
+        if not is_arraylike(coef) or len(coef)==1 or len(coef) == self.data.shape[1] or np.shape(coef)==self.data.shape:
             
             self._derived_properties["data"]  = self.data / coef
             if self.has_variance():
