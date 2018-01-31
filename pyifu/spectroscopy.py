@@ -51,7 +51,7 @@ def load_slice(filename, **kwargs):
     """ """
     return Slice(filename, **kwargs)
 
-def get_spectrum(lbda, flux, variance=None, header=None):
+def get_spectrum(lbda, flux, variance=None, header=None, logwave=None):
     """ Create a spectrum from the given data
     
     Parameters
@@ -67,13 +67,20 @@ def get_spectrum(lbda, flux, variance=None, header=None):
 
     header: [fits header / None]
         fits header assoiated to the data
+        
+    logwave: [None / bool] -optional-
+        If the wavelength given in log of wavelength. 
+        If you known set True (= given in log) or False (= given in angstrom)
+        If let to None, this will test if the first wavelength is smaller or 
+        higher than a default number (50).
+
 
     Returns
     -------
     Spectrum
     """
     spec = Spectrum(None)
-    spec.create(data=flux, variance=variance, header=None, lbda=lbda)
+    spec.create(data=flux, variance=variance, header=None, lbda=lbda, logwave=logwave)
     return spec
 
 def get_slice(data, xy, spaxel_vertices=None,
@@ -1112,7 +1119,7 @@ class SpaxelHandler( SpecSource ):
         if index in self.spaxel_mapping:
             return self.spaxel_mapping[index]
         return None, None
-    
+
     def xy_to_index(self, xy):
         """ Each spaxel has a unique x,y, location that 
         can be converted into a unique index (1d-array) entry.
