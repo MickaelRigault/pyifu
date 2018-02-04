@@ -6,7 +6,7 @@ import numpy as np
 from propobject import BaseObject
 
 
-__all__ = ["load_cube","load_spectrum", "get_spectrum"]
+__all__ = ["load_cube","load_spectrum", "get_spectrum", "get_cube"]
 
 def load_cube(filename,**kwargs):
     """ Load a Cube from the given filename 
@@ -535,7 +535,7 @@ class Spectrum( SpecSource ):
             varerr_ = [np.nan] * len(self.lbda) if not self.has_variance() else self.variance if not saveerror else np.sqrt(self.variance)
             
             for l_,f_,v_ in zip(self.lbda, self.data, varerr_):
-                fileout.write("#%.1f %.3e %.3e\n"%(l_,f_,v_))
+                fileout.write("%.1f %.3e %.3e\n"%(l_,f_,v_))
             fileout.close()
 
     def load(self, filename, dataindex=0, varianceindex=1, headerindex=None):
@@ -1220,7 +1220,7 @@ class Slice( SpaxelHandler ):
         # -- Let's go
         if ax is None:
             fig = mpl.figure(figsize=[6,5])
-            axim  = fig.add_subplot(111)
+            ax  = fig.add_subplot(111)
         else:
             fig = ax.figure
 
@@ -1243,13 +1243,13 @@ class Slice( SpaxelHandler ):
         ps = [patches.Polygon(self.spaxel_vertices+np.asarray([x[i],y[i]]),
                                 facecolor=colors[i], alpha=0.8,**kwargs)
               for i  in range(self.nspaxels)]
-        ip = [axim.add_patch(p_) for p_ in ps]
-        axim.autoscale(True, tight=True)
+        ip = [ax.add_patch(p_) for p_ in ps]
+        ax.autoscale(True, tight=True)
 
             
         if show_colorbar:
             from .tools import colorbar, insert_ax
-            axcbar = axim.insert_ax("right", shrunk=0.88)
+            axcbar = ax.insert_ax("right", shrunk=0.88)
             axcbar.colorbar(mpl.cm.viridis,vmin=vmin,vmax=vmax,label=clabel,
                     fontsize=cfontsize)
     

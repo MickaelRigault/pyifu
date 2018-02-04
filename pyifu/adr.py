@@ -176,6 +176,10 @@ class ADR( BaseObject ):
     #   Properties        #
     # =================== #
     @property
+    def data(self):
+        return self._properties
+    
+    @property
     def temperature(self):
         """ temperature in Celcius """
         return self._properties["temperature"]
