@@ -6,7 +6,8 @@ import numpy as np
 from propobject import BaseObject
 
 
-__all__ = ["load_cube","load_spectrum", "get_spectrum", "get_cube"]
+__all__ = ["load_cube","load_spectrum",
+            "get_spectrum", "get_slice", "get_cube"]
 
 def load_cube(filename,**kwargs):
     """ Load a Cube from the given filename 
@@ -218,7 +219,7 @@ class SpecSource( BaseObject ):
     # -------- #
     #  SETTER  #
     # -------- #
-    def create(self,data,header=None,
+    def create(self, data, header=None,
                     variance=None,
                     lbda=None, logwave=None):
         """  High level setting method.
@@ -619,7 +620,9 @@ class Spectrum( SpecSource ):
         from scipy.ndimage.filters import gaussian_filter
         data_ = gaussian_filter(self.data, new_disp)
         var_  = gaussian_filter(self.var, new_disp) if self.has_variance() else None
-        return get_spectrum(self.lbda, data_, variance=var_, header=self.header.copy())
+        spec_ = self.copy()
+        spec_.create(data_, lbda=self.lbda, variance=var_, header=self.header.copy())
+        return spec_
         
     def reshape(self, new_lbda, kind="cubic"):
         """ Create a copy of the current spectrum with a new wavelength shape.
@@ -639,7 +642,9 @@ class Spectrum( SpecSource ):
         from scipy.interpolate import interp1d
         data_ = interp1d(self.lbda, self.data, kind=kind)(new_lbda)
         var_  = interp1d(self.lbda, self.variance, kind=kind)(new_lbda) if self.has_variance() else None
-        return get_spectrum(new_lbda, data_, variance=var_, header=self.header.copy())
+        spec_ = self.copy()
+        spec_.create(data_, lbda=new_lbda, variance=var_, header=self.header.copy())
+        return spec_
 
     def scale_by(self, coef):
         """ divide the data by the given scaling factor 
@@ -1255,7 +1260,16 @@ class Slice( SpaxelHandler ):
     
         fig.figout(savefile=savefile, show=show)
         
-    
+    def get_spaxel_polygon(self):
+        """ return list of Shapely Polygon corresponding to the spaxel position on sky """
+        try:
+            from shapely.geometry import Polygon
+        except ImportError:
+            raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
+        
+        x,y = np.asarray(self.index_to_xy(self.indexes)).T
+        return [Polygon(self.spaxel_vertices+np.asarray([x[i],y[i]])) for i in range(self.nspaxels)]
+        
 class Cube( SpaxelHandler ):
     """
     This Class is the basic class upon which the other Cube will be based.
