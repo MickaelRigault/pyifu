@@ -624,7 +624,7 @@ class Spectrum( SpecSource ):
         spec_.create(data_, lbda=self.lbda, variance=var_, header=self.header.copy())
         return spec_
         
-    def reshape(self, new_lbda, kind="cubic"):
+    def reshape(self, new_lbda, kind="linear", fill_value="extrapolate", **kwargs):
         """ Create a copy of the current spectrum with a new wavelength shape.
         Flux and variances (if any) will be reshaped accordingly
     
@@ -633,15 +633,40 @@ class Spectrum( SpecSource ):
         Parameters
         ----------
         new_lbda: [array]
-            new wavelength array (in Anstrom)
+            new wavelength array (in Angstrom)
+
+        // Scipy interpolate options
+
+        kind : [str or int] -optional-
+            Specifies the kind of interpolation as a string
+            ('linear', 'nearest', 'zero', 'slinear', 'quadratic', 'cubic'
+            where 'zero', 'slinear', 'quadratic' and 'cubic' refer to a spline
+            interpolation of zeroth, first, second or third order) or as an
+            integer specifying the order of the spline interpolator to use.
+            Default is 'linear'.
+        
+        fill_value: [array-like or (array-like, array_like) or "extrapolate"] -optional-
+            - if a ndarray (or float), this value will be used to fill in for
+            requested points outside of the data range. If not provided, then
+            the default is NaN. The array-like must broadcast properly to the
+            dimensions of the non-interpolation axes.
+            - If a two-element tuple, then the first element is used as a
+            fill value for ``x_new < x[0]`` and the second element is used for
+            ``x_new > x[-1]``. Anything that is not a 2-element tuple (e.g.,
+            list or ndarray, regardless of shape) is taken to be a single
+            array-like argument meant to be used for both bounds as
+            ``below, above = fill_value, fill_value``.
+
+        **kwargs goes to scipy.interpolate.interp1d
 
         Returns
         -------
         Spectrum
         """
         from scipy.interpolate import interp1d
-        data_ = interp1d(self.lbda, self.data, kind=kind)(new_lbda)
-        var_  = interp1d(self.lbda, self.variance, kind=kind)(new_lbda) if self.has_variance() else None
+        data_ = interp1d(self.lbda, self.data,     kind=kind, fill_value="extrapolate", **kwargs)(new_lbda)
+        var_  = interp1d(self.lbda, self.variance, kind=kind, fill_value="extrapolate", **kwargs)(new_lbda) \
+          if self.has_variance() else None
         spec_ = self.copy()
         spec_.create(data_, lbda=new_lbda, variance=var_, header=self.header.copy())
         return spec_
