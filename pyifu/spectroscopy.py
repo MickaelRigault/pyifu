@@ -1235,7 +1235,7 @@ class SpaxelHandler( SpecSource ):
 
 class Slice( SpaxelHandler ):
     """ """
-    def show(self,  toshow="data",ax = None, savefile=None, show=True,
+    def show(self, toshow="data", ax = None, savefile=None, show=True,
                  vmin=None, vmax=None, show_colorbar=True,
                  clabel="",cfontsize="large",
                  **kwargs):
@@ -1254,16 +1254,16 @@ class Slice( SpaxelHandler ):
         else:
             fig = ax.figure
 
-        value = eval("self.%s"%toshow)
+        value = np.asarray(eval("self.%s"%toshow))
         # - which colors
         if vmin is None:
-            vmin = np.percentile(value,0)
+            vmin = np.percentile(value[value==value],0)
         elif type(vmin) == str:
-            vmin = np.percentile(value,float(vmin))
+            vmin = np.percentile(value[value==value],float(vmin))
         if vmax is None:
-            vmax = np.percentile(value,100)
+            vmax = np.percentile(value[value==value],100)
         elif type(vmax) == str:
-            vmax = np.percentile(value,float(vmax))
+            vmax = np.percentile(value[value==value],float(vmax))
                 
         colors = mpl.cm.viridis((value-vmin)/(vmax-vmin))
         
