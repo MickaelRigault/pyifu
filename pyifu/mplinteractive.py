@@ -180,7 +180,7 @@ class InteractiveCube( BaseObject ):
         self.axspec.set_ylim(self.get_autospec_ylim()) # good ylim
         self.set_to_origin() # Set back the class to initial conditions
 
-        self.fig.canvas.draw()
+        self._draw_()
         
     def setup(self):
         """ Run That when you launch. """
@@ -188,14 +188,17 @@ class InteractiveCube( BaseObject ):
         self.set_to_origin()
         
         # - Default Fixed Values
-        self.property_backup[self.axspec]["default_axedgewidth"] = \
-          [s_.get_linewidth() for s_ in self.axspec.spines.values()]
+        for ax_ in self.fig.axes:
+            self.property_backup[ax_]["default_axedgewidth"] = \
+              [s_.get_linewidth() for s_ in ax_.spines.values()]
+            #self.property_backup[ax_]["default_axedgecolor"] = \
+            #  [s_.get_color() for s_ in ax_.spines.values()]
 
-        self.property_backup[self.axim]["default_axedgewidth"] = \
-          [s_.get_linewidth() for s_ in self.axim.spines.values()]
-          
+        # - Specificity of spaxel picking
+        
         self.property_backup[self.axim]["default_edgecolor"] = \
               self._spaxels[0].get_edgecolor()
+              
         self.property_backup[self.axim]["default_zordercolor"] = \
               self._spaxels[0].get_zorder()
 
@@ -222,7 +225,7 @@ class InteractiveCube( BaseObject ):
             # - change axes linewidth
             [s_.set_linewidth(self.property_backup[event.inaxes]["default_axedgewidth"][i]*2)
                  for i,s_ in enumerate(event.inaxes.spines.values())]
-            self.fig.canvas.draw()
+            self._draw_()
             
     def interact_leave_axis(self, event):
         """ """
@@ -230,7 +233,7 @@ class InteractiveCube( BaseObject ):
             # - change axes linewidth            
             [s_.set_linewidth(self.property_backup[event.inaxes]["default_axedgewidth"][i])
                  for i,s_ in enumerate(event.inaxes.spines.values())]
-            self.fig.canvas.draw()
+            self._draw_()
             
     # ----------
     # Keyboard
@@ -346,7 +349,7 @@ class InteractiveCube( BaseObject ):
         """ """
         self._selected_wavelength = [event.xdata]
             
-    def _onrelease_axspec_(self, event):
+    def _onrelease_axspec_(self, event, draw=True):
         """ """
         if self._selected_wavelength is None:
             return
@@ -359,17 +362,21 @@ class InteractiveCube( BaseObject ):
             self.draw_selected_wavelength()
 
         self.change_axim_color(self._selected_wavelength)
-        self.fig.canvas.draw()
+        if draw:
+            self._draw_()
         
     # =================== #
     #   Affect Plot       #
     # =================== #
+    def _draw_(self):
+        self.fig.canvas.draw_idle()
+    
     def update_figure_fromaxim(self):
         """ What would happen once the spaxels are picked. """
         if len(self.selected_spaxels)>0:
             self.show_picked_spaxels()
             self.show_picked_spectrum()
-            self.fig.canvas.draw()
+            self._draw_()
 
     # -------- #
     #   axim   #
@@ -441,7 +448,7 @@ class InteractiveCube( BaseObject ):
         self._clean_spec_axspec_()
         self._clean_wave_axspec_()
         if draw:
-            self.fig.canvas.draw()
+            self._draw_()
         
     def _clean_spec_axspec_(self):
         """ """
@@ -503,10 +510,10 @@ class InteractiveCube( BaseObject ):
     def property_backup(self):
         """ """
         if self._derived_properties["property_backup"] is None:
-            self._derived_properties["property_backup"] = {self.fig   :{},
-                                                           self.axim  :{},
-                                                           self.axspec:{}
-                                                            }
+            self._derived_properties["property_backup"] = {self.fig   :{}}
+            for ax_ in self.fig.axes:
+                self._derived_properties["property_backup"][ax_] = {}
+                
         return self._derived_properties["property_backup"]
 
     # - On Flight Properties
