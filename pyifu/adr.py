@@ -598,3 +598,4 @@ def ten(*args):
                          "one 'DD:MM:SS.S' string as input")
 
     return dec
+
