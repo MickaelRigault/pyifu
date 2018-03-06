@@ -619,7 +619,7 @@ class Spectrum( SpecSource ):
         """
         from scipy.ndimage.filters import gaussian_filter
         data_ = gaussian_filter(self.data, new_disp)
-        var_  = gaussian_filter(self.var, new_disp) if self.has_variance() else None
+        var_  = gaussian_filter(self.variance, new_disp) if self.has_variance() else None
         spec_ = self.copy()
         spec_.create(data_, lbda=self.lbda, variance=var_, header=self.header.copy())
         return spec_
