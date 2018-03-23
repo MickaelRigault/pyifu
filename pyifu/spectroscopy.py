@@ -1485,7 +1485,7 @@ class Cube( SpaxelHandler ):
         return spec
     
     # - PARTIAL CUBE
-    def get_partial_cube(self, indexes, slice_id):
+    def get_partial_cube(self, indexes, slice_id, verbose=False):
         """ Get a subsample of the current cube.
         The return cube will only contain the requested slices (spaxel positions) 
         at the requested wavelengths
@@ -1504,6 +1504,8 @@ class Cube( SpaxelHandler ):
         Cube
         """
         spaxelsin = np.in1d(self.indexes, indexes)
+        if verbose: print(spaxelsin)
+            
         rawdata = self.rawdata[slice_id].T[spaxelsin].T
         if self.has_variance():
             var = self.variance[slice_id].T[spaxelsin].T
