@@ -1222,7 +1222,7 @@ class SpaxelHandler( SpecSource ):
     @property
     def indexes(self):
         """ Name/ID of the spaxels. (keys from spaxel_mapping)"""
-        return np.asarray(list(self.spaxel_mapping.keys())) if self.spaxel_mapping is not None else []
+        return np.sort( list(self.spaxel_mapping.keys())) if self.spaxel_mapping is not None else []
     
     @property
     def spaxel_mapping(self):
