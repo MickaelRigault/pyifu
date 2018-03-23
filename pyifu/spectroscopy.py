@@ -333,6 +333,10 @@ class SpecSource( BaseObject ):
         if lbda is None:
             self._properties["lbda"] = None
             return
+        if len(np.atleast_1d(lbda)) == 1:
+            self._properties["lbda"] = lbda
+            return
+        
         # - unique step array?
         if len(np.unique(np.round(lbda[1:]-lbda[:-1], decimals=4)))==1:
             # slower and a bit convoluted but ensure class' consistency
@@ -1313,7 +1317,7 @@ class Cube( SpaxelHandler ):
         if Cube not in other.__class__.__mro__:
             raise TypeError("Cannot do %s between a cube with a non-Cube object"%kind)
         if np.shape(self.data) != np.shape(other.data):
-            raise TypeError("Cannot do %kind between cubes with different data shape"%kind)
+            raise TypeError("Cannot do `%s` between cubes with different data shape"%kind)
         
     def __add__(self, other):
         """ """
@@ -1378,6 +1382,7 @@ class Cube( SpaxelHandler ):
         lbda_min, lbda_max: [None or float] -required if not index-
             lower and higher boundaries of the wavelength (in Angstrom) defining the slice.
             None means no limit.
+            ```flagin = (self.lbda>=lbda_min) * (self.lbda<=lbda_max)```
             *Ignored if index provided*
             
         index: [int] -optional-
@@ -1404,15 +1409,16 @@ class Cube( SpaxelHandler ):
             slice_data = eval("self.%s[%d]"%(data,index))
             slice_var  = None if data not in ['data','rawdata'] or not self.has_variance()\
               else eval("self.variance[%d]"%(index))
+            lbda = self.lbda[index]
         else:
             if lbda_min is None: lbda_min = self.lbda[0]
             if lbda_max is None: lbda_max = self.lbda[-1]
                 
             if lbda_min>lbda_max: lbda_min,lbda_max = np.sort([lbda_min,lbda_max])
                 
-            flagin = (self.lbda>=lbda_min)*(self.lbda<=lbda_max)
+            flagin = (self.lbda>=lbda_min) * (self.lbda<=lbda_max)
             flagin = np.asarray(flagin, dtype="bool")
-            
+            lbda=np.mean(self.lbda[flagin])
             if 'data' not in data or not self.has_variance():
                 usemean   = True
                 slice_var = None
@@ -1431,7 +1437,7 @@ class Cube( SpaxelHandler ):
             return slice_data
 
         return get_slice(slice_data, self.index_to_xy(self.indexes), spaxel_vertices=self.spaxel_vertices, 
-                                 variance=slice_var, indexes=self.indexes, lbda=None)
+                                 variance=slice_var, indexes=self.indexes, lbda=lbda)
     # --------- #
     #  SPAXEL   #
     # --------- #
