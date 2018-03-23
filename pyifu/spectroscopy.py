@@ -1504,7 +1504,7 @@ class Cube( SpaxelHandler ):
         Cube
         """
         spaxelsin = np.in1d(self.indexes, indexes)
-        if verbose: print(spaxelsin)
+        if verbose: print(np.argwhere(spaxelsin))
             
         rawdata = self.rawdata[slice_id].T[spaxelsin].T
         if self.has_variance():
