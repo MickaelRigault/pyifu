@@ -1884,7 +1884,7 @@ class Cube( SpaxelHandler ):
                                       vmin = vmin,
                                       vmax = vmax)
         # - The Patchs
-        ps = [patches.Polygon( self.spaxel_vertices+self.index_to_xy(id_),
+        ps = [patches.Polygon( self.spaxel_vertices+np.asarray(self.index_to_xy(id_)),
                         facecolor=colors[i], alpha=0.8,**kwargs) for i,id_  in enumerate(self.indexes)]
         ip = [axim.add_patch(p_) for p_ in ps]
         axim.autoscale(True, tight=True)
