@@ -428,7 +428,10 @@ class SpecSource( BaseObject ):
         """ """
         if not self._has_spec_setup_():
             return None
-        
+
+        if self.spec_prop["logwave"] is None:
+            self.spec_prop["logwave"] = bool( self.spec_prop["lstart"] < 50 )
+            
         return np.arange(self.spec_prop["lspix"]) * self.spec_prop["lstep"] + self.spec_prop["lstart"] \
           if not self.spec_prop["logwave"] else np.exp(np.arange(self.spec_prop["lspix"]) * self.spec_prop["lstep"] + self.spec_prop["lstart"])
 
@@ -443,7 +446,7 @@ class SpecSource( BaseObject ):
         self.spec_prop["lstep"]  = np.unique(lbda[1:]-lbda[:-1])[0]
         self.spec_prop["lspix"]  = len(lbda)
         self.spec_prop["lstart"] = lbda[0]
-        self.spec_prop["logwave"] = (self.spec_prop["lstart"] < 50) if logwave is None else bool(logwave)
+        self.spec_prop["logwave"] = bool(self.spec_prop["lstart"] < 50) if logwave is None or logwave=="None" else bool(logwave)
         
         self.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop["lspix"])   
         self.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop["lstep"])
@@ -1881,7 +1884,7 @@ class Cube( SpaxelHandler ):
                                       vmin = vmin,
                                       vmax = vmax)
         # - The Patchs
-        ps = [patches.Polygon(self.spaxel_vertices+np.asarray(self.index_to_xy(id_)),
+        ps = [patches.Polygon( self.spaxel_vertices+self.index_to_xy(id_),
                         facecolor=colors[i], alpha=0.8,**kwargs) for i,id_  in enumerate(self.indexes)]
         ip = [axim.add_patch(p_) for p_ in ps]
         axim.autoscale(True, tight=True)
