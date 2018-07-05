@@ -106,11 +106,11 @@ class ADRFitter( BaseFitter ):
             
         ax.legend(loc="best", frameon=True, ncol=2)
         if labelkey is None:
-            textlabel = " ; ".join(["%s: %.2f"%(k,self.fitvalues[k]) for k in self.model.FREEPARAMETERS]) + " | %s: %.1f"%("lbdaref",self.model.adr.lbdaref)
+            textlabel = " ; ".join(["%s: %.2f"%(k,self.fitvalues[k]) for k in self.model.FREEPARAMETERS]) + " | %s: %.1f"%("lbdaref",self.model.adr.lbdaref) + " | unit: %.2f"%self.model._unit
         else:
             textlabel = " ; ".join(["%s: %.2f"%(k,self.fitvalues[k]) for k in labelkey])
             
-        ax.text(0.5,1.01, textlabel, transform=ax.transAxes, va="bottom", ha="center")
+        ax.text(0.5,1.01, textlabel, fontsize="small", transform=ax.transAxes, va="bottom", ha="center")
         if show_colorbar:
             axc = ax.insert_ax("right", shrunk=0.89)
             axc.colorbar(cmap, vmin=vmin, vmax=vmax,
