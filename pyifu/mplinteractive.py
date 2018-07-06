@@ -161,8 +161,10 @@ class InteractiveCube( BaseObject ):
         #   PICKING    #
         self._clicked         = False
         self._picked_poly     = None
+        self.picked_position  = None
         self._currentactive   = 0
         self.selected_spaxels = []
+        
         #   KEYBOARD   #
         self.pressed_key      = {}
         #   AXIM       #
@@ -175,6 +177,9 @@ class InteractiveCube( BaseObject ):
         """ Clean the Axes and set things back to there initial values """
         self.change_axim_color(None) # Remove selected wavelength
         self._clean_picked_im_() # Remove Spaxels selected
+        if hasattr(self,"current_picked_scatter"):
+            self.current_picked_scatter.remove()
+
         self.clean_axspec(draw=False) # Clear the Axis
         self.cube._display_spec_(self.axspec, toshow=self.toshow) # Draw new spectra
         self.axspec.set_ylim(self.get_autospec_ylim()) # good ylim
@@ -251,7 +256,7 @@ class InteractiveCube( BaseObject ):
         if key_ in ["h","H"]:
             print(DOCUMENTATION)
             return
-
+        
         self.pressed_key[key_] = True
         
     def inteact_releasekey(self, event):
@@ -261,7 +266,10 @@ class InteractiveCube( BaseObject ):
             key_ = event.key
         except:
             return
-        
+
+        if key_ is not None:
+            key_ = key_.replace(" ","space")
+
         self.pressed_key[key_] = False
         
     # ----------
@@ -296,9 +304,15 @@ class InteractiveCube( BaseObject ):
     # - axim
     def _onclick_axim_(self, event):
         """ """
-        self._clicked = True
-        self._picked_spaxel   = [event.xdata, event.ydata]
-        self._tracked_spaxel  = []
+        
+        if event.dblclick:
+            self.picked_position = event.xdata, event.ydata
+            self.show_picked_position()
+        else:
+            self._clicked = True
+            self._picked_spaxel   = [event.xdata, event.ydata]
+            self._tracked_spaxel  = []
+
         
     def _ontrack_axim_(self, event):
         """ What happen with the mouse goes over the axis?"""
@@ -314,6 +328,8 @@ class InteractiveCube( BaseObject ):
             # A Circle
             elif self._keyalt:
                 self._picked_poly = ["Circle",  [self._picked_spaxel,distance.euclidean(self._picked_spaxel, [event.xdata, event.ydata])]]
+                
+                
             # Rectangle
             else:
                 self._picked_poly = ["Polygon", [[[self._picked_spaxel[0], self._picked_spaxel[1]],
@@ -322,6 +338,8 @@ class InteractiveCube( BaseObject ):
             
     def _onrelease_axim_(self, event):
         """ """
+        if event.dblclick:
+            return
         # - Region Selection
         if self._picked_poly is not None:
             which, args = self._picked_poly
@@ -381,6 +399,13 @@ class InteractiveCube( BaseObject ):
     # -------- #
     #   axim   #
     # -------- #
+    def show_picked_position(self, marker="+", color="k", s=100, zorder=8):
+        """ """
+        if hasattr(self,"current_picked_scatter"):
+            self.current_picked_scatter.remove()
+            
+        self.current_picked_scatter = self.axim.scatter(*self.picked_position, marker=marker, color=color, s=s, zorder=zorder)
+        
     def show_picked_spaxels(self):
         """ """
         # - if not hold. Remove the former this
@@ -526,6 +551,11 @@ class InteractiveCube( BaseObject ):
     def _keyalt(self):
         """ If the control key pressed? """
         return self.pressed_key.get("alt",False)
+
+    @property
+    def _keypick(self):
+        """ If the space key pressed? """
+        return self.pressed_key.get("space",False)
     
     @property
     def _active_color(self):

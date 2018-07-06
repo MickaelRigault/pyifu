@@ -1761,7 +1761,7 @@ class Cube( SpaxelHandler ):
     # ==     External Tools         == #
     # ================================ #
     def show(self, toshow="data",
-                 interactive=False,
+                 interactive=False, launch=True,
                  savefile=None, ax=None, show=True,
                  show_meanspectrum=True, cmap=None,
                  vmin=None, vmax=None, notebook=None,
@@ -1780,6 +1780,11 @@ class Cube( SpaxelHandler ):
         interactive: [bool] -optional- 
            Enable to interact with the plot to navigate through the cube.
            (this might depend on your matplotlib setup.)
+
+        launch: [bool] -optional-
+            Shall the interactive mode (if selected) be launched?
+            If not, use iplot.launch(vmin=vmin, vmax=vmax, notebook=notebook)
+            where iplot is what has been returned by show()
 
         cmap: [matplotlib colormap] -optional-
             Colormap used for the wavelength integrated cube (imshow).
@@ -1826,8 +1831,9 @@ class Cube( SpaxelHandler ):
         """
         if interactive:
             from .mplinteractive import InteractiveCube
-            iplot = InteractiveCube(self,fig=None, axes=ax, toshow=toshow)
-            iplot.launch(vmin=vmin, vmax=vmax,notebook=notebook)
+            iplot = InteractiveCube(self, fig=None, axes=ax, toshow=toshow)
+            if launch:
+                iplot.launch(vmin=vmin, vmax=vmax, notebook=notebook)
             return iplot
 
         # - Not interactive
