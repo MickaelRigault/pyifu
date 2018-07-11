@@ -79,8 +79,8 @@ class ADRFitter( BaseFitter ):
         import matplotlib.pyplot as mpl
         from .tools import figout, insert_ax, colorbar
         if ax is None:
-            fig = mpl.figure(figsize=[5,4])
-            ax  = fig.add_axes([0.15,0.15,0.8,0.8])
+            fig = mpl.figure(figsize=[5.5,4])
+            ax  = fig.add_axes([0.15,0.15,0.7,0.7])
             ax.set_xlabel("spaxels x-axis", fontsize="medium")
             ax.set_ylabel("spaxels y-axis", fontsize="medium")
         else:
