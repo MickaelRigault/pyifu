@@ -80,7 +80,7 @@ class ADRFitter( BaseFitter ):
         from .tools import figout, insert_ax, colorbar
         if ax is None:
             fig = mpl.figure(figsize=[5.5,4])
-            ax  = fig.add_axes([0.13,0.13,0.7,0.7])
+            ax  = fig.add_axes([0.13,0.13,0.75,0.75])
             ax.set_xlabel("spaxels x-axis", fontsize="medium")
             ax.set_ylabel("spaxels y-axis", fontsize="medium")
         else:
