@@ -539,7 +539,7 @@ class Spectrum( SpecSource ):
         else:
             fileout = open(savefile.replace(".fits", ".txt"),"w")
             for k,v in self.header.items():
-                fileout.write("#%s %s\n"%(k,v))
+                fileout.write("# %s: %s\n"%(k,v))
             varerr_ = [np.nan] * len(self.lbda) if not self.has_variance() else self.variance if not saveerror else np.sqrt(self.variance)
             
             for l_,f_,v_ in zip(self.lbda, self.data, varerr_):
