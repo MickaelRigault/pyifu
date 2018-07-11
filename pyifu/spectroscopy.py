@@ -736,7 +736,7 @@ class Spectrum( SpecSource ):
         from .tools import figout, specplot, mpl
         # - Axis definition
         if ax is None:
-            fig = mpl.figure(figsize=[6,4])
+            fig = mpl.figure(figsize=[6.5,3.5])
             ax = fig.add_axes([0.15,0.15,0.8,0.75])
             ax.set_xlabel(r"Wavelength", fontsize="large")
             ax.set_ylabel(r"Flux", fontsize="large")
