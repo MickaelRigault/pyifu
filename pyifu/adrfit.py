@@ -116,7 +116,7 @@ class ADRFitter( BaseFitter ):
         if show_colorbar:
             axc = ax.insert_ax("right", shrunk=0.89)
             axc.colorbar(cmap, vmin=vmin, vmax=vmax,
-                        label=clabel, fontsize="large")
+                        label=clabel, fontsize="medium")
             
         fig.figout(savefile=savefile, show=show)
         return {"ax":ax, "fig":fig, "plot":[scd,scm]}
