@@ -79,10 +79,10 @@ class ADRFitter( BaseFitter ):
         import matplotlib.pyplot as mpl
         from .tools import figout, insert_ax, colorbar
         if ax is None:
-            fig = mpl.figure(figsize=[8,5])
+            fig = mpl.figure(figsize=[5,4])
             ax  = fig.add_subplot(111)
-            ax.set_xlabel("spaxels x-axis")
-            ax.set_xlabel("spaxels y-axis")
+            ax.set_xlabel("spaxels x-axis", fontsize="medium")
+            ax.set_ylabel("spaxels y-axis", fontsize="medium")
         else:
             fig = ax.figure
             
@@ -91,6 +91,7 @@ class ADRFitter( BaseFitter ):
             cmap = mpl.cm.viridis
         vmin, vmax = np.nanmin(self.lbda),np.nanmax(self.lbda)
         colors = cmap( (self.lbda-vmin)/(vmax-vmin) )
+
 
         # - data
         scd = ax.scatter(self.x, self.y, facecolors=colors, edgecolors="None",
@@ -103,7 +104,8 @@ class ADRFitter( BaseFitter ):
         xmodel, ymodel = self.model.get_model(self.lbda)
         scm = ax.scatter(xmodel, ymodel, edgecolors=colors, facecolors="None",
                        lw=2., label="model", **kwargs)
-            
+
+        
         ax.legend(loc="best", frameon=True, ncol=2)
         if labelkey is None:
             textlabel = " ; ".join(["%s: %.2f"%(k,self.fitvalues[k]) for k in self.model.FREEPARAMETERS]) + " | %s: %.1f"%("lbdaref",self.model.adr.lbdaref) + " | unit: %.2f"%self.model._unit
