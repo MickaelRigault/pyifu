@@ -80,7 +80,7 @@ class ADRFitter( BaseFitter ):
         from .tools import figout, insert_ax, colorbar
         if ax is None:
             fig = mpl.figure(figsize=[5.5,4])
-            ax  = fig.add_axes([0.13,0.13,0.75,0.75])
+            ax  = fig.add_axes([0.14,0.13,0.76,0.75])
             ax.set_xlabel("spaxels x-axis", fontsize="medium")
             ax.set_ylabel("spaxels y-axis", fontsize="medium")
         else:
@@ -108,7 +108,7 @@ class ADRFitter( BaseFitter ):
         
         ax.legend(loc="best", frameon=True, ncol=2)
         if labelkey is None:
-            textlabel = " ; ".join(["%s: %.2f"%(k,self.fitvalues[k]) for k in self.model.FREEPARAMETERS]) + "\n"+" | %s: %.1f"%("lbdaref",self.model.adr.lbdaref) + " | unit: %.2f"%self.model._unit
+            textlabel = " ; ".join(["%s: %.2f"%(k,self.fitvalues[k]) for k in self.model.FREEPARAMETERS]) + "\n"+" %s: %.1f"%("lbdaref",self.model.adr.lbdaref) + " | unit: %.2f"%self.model._unit
         else:
             textlabel = " ; ".join(["%s: %.2f"%(k,self.fitvalues[k]) for k in labelkey])
             
