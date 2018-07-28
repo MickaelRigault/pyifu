@@ -67,7 +67,7 @@ class ADRFitter( BaseFitter ):
     # ---------- #
     def show(self, ax=None, savefile=None, show=True, cmap=None,
                  show_colorbar=True, clabel="Wavelength [A]",
-                 labelkey=None,**kwargs):
+                 labelkey=None, guess_airmass=None,**kwargs):
         """ Plotting method for the ADR fit.
         
         Parameters
@@ -111,6 +111,8 @@ class ADRFitter( BaseFitter ):
             textlabel = " ; ".join(["%s: %.2f"%(k,self.fitvalues[k]) for k in self.model.FREEPARAMETERS]) + "\n"+" %s: %.1f"%("lbdaref",self.model.adr.lbdaref) + " | unit: %.2f"%self.model._unit
         else:
             textlabel = " ; ".join(["%s: %.2f"%(k,self.fitvalues[k]) for k in labelkey])
+        if guess_airmass is not None:
+            textlabel += "(input airmass: %.2f)"%guess_airmass
             
         ax.text(0.5,1.01, textlabel, fontsize="small", transform=ax.transAxes, va="bottom", ha="center")
         if show_colorbar:
