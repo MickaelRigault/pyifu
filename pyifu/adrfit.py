@@ -113,7 +113,7 @@ class ADRFitter( BaseFitter ):
             textlabel = " ; ".join(["%s: %.2f"%(k,self.fitvalues[k]) for k in labelkey])
             
         if guess_airmass is not None:
-            textlabel += "(input airmass: %.2f)"%guess_airmass
+            textlabel += " (input airmass: %.2f)"%guess_airmass
             
         ax.text(0.5,1.01, textlabel, fontsize="small", transform=ax.transAxes, va="bottom", ha="center")
         if show_colorbar:
