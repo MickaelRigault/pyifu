@@ -111,6 +111,7 @@ class ADRFitter( BaseFitter ):
             textlabel = " ; ".join(["%s: %.2f"%(k,self.fitvalues[k]) for k in self.model.FREEPARAMETERS]) + "\n"+" %s: %.1f"%("lbdaref",self.model.adr.lbdaref) + " | unit: %.2f"%self.model._unit
         else:
             textlabel = " ; ".join(["%s: %.2f"%(k,self.fitvalues[k]) for k in labelkey])
+            
         if guess_airmass is not None:
             textlabel += "(input airmass: %.2f)"%guess_airmass
             
