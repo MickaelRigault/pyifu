@@ -11,7 +11,7 @@ MAINTAINER_EMAIL = 'm.rigault@ipnl.in2p3.fr'
 URL = 'https://github.com/MickaelRigault/pyifu'
 LICENSE = 'Apache 2.0'
 DOWNLOAD_URL = 'https://github.com/MickaelRigault/pyifu/0.6'
-VERSION = '0.6.6'
+VERSION = '0.6.8'
 
 try:
     from setuptools import setup, find_packages
@@ -26,7 +26,7 @@ def check_dependencies():
    # tested what the minimal versions that will work are
    # (help on that would be awesome)
    try:
-       import astropy
+       import propobject
    except ImportError:
        install_requires.append('propobject')
     
