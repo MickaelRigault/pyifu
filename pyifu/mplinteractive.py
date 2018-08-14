@@ -259,35 +259,37 @@ class InteractiveCube( BaseObject ):
             print(DOCUMENTATION)
             return
         if DEBUG: print("%s becomes True"%key_)
-        
+            
         # ctrl+alt
-        if key_ == "ctrl+alt":
+        if key_ in ["ctrl+alt","ctrl+a"]:
             for key__ in ["control","alt"]:
-                self.pressed_key[key__] = True
+                self.pressed_key[key__] = True if key__ not in self.pressed_key else not self.pressed_key[key__]
         else:
-            self.pressed_key[key_] = True
+            self.pressed_key[key_] = True if key_ not in self.pressed_key else not self.pressed_key[key_]
         
     def inteact_releasekey(self, event):
         """ """
+        pass
         # - correct a mpl bug for command
+        """
         try:
             key_ = event.key
         except:
             return
-
+                    
         if key_ is not None:
             key_ = key_.replace(" ","space")
 
         if DEBUG: print("%s becomes *False*"%key_)
         # ctrl+alt
-        if key_ == "ctrl+alt":
+        if key_ in ["ctrl+alt","ctrl+a"]:
             for key__ in ["control","alt"]:
                 if DEBUG: print("%s becomes *False*"%key__)
                 self.pressed_key[key__] = False
 
         else:
             self.pressed_key[key_] = False
-        
+        """
     # ----------
     # - Click 
     def interact_onclick(self, event):
@@ -570,8 +572,8 @@ class InteractiveCube( BaseObject ):
     def _keyalt(self):
         """ If the control key pressed? """
         if DEBUG: print("is that Holded?")
-        if DEBUG: print(self.pressed_key.get("alt",False))
-        return self.pressed_key.get("alt",False)
+        if DEBUG: print(self.pressed_key.get("alt",False) or self.pressed_key.get("a",False)) 
+        return self.pressed_key.get("alt",False) or self.pressed_key.get("a",False)
 
     @property
     def _keypick(self):
