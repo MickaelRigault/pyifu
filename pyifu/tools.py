@@ -210,7 +210,7 @@ def specplot(ax,x,y,var=None,
     # - Properties of band
     if var is not None:
         default_band   = dict(
-            color=propplot["color"],alpha=0.3,
+            color=propplot["color"], alpha=kwargs.pop("alpha",1.)/3.,
             zorder=3)
         
         bandprop = kwargs_update(default_band,**bandprop)

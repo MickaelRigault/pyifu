@@ -10,7 +10,7 @@ import matplotlib.pyplot as mpl
 from propobject    import BaseObject
 from .tools        import kwargs_update
 
-
+DEBUG = False
 
 DOCUMENTATION = \
    """
@@ -64,6 +64,7 @@ class InteractiveCube( BaseObject ):
     
     def __init__(self, cube, fig=None, axes=None, toshow="data"):
         """ """
+        if DEBUG: print("Let it start")
         if cube is not None:
             self.set_cube(cube)
         if axes is not None:
@@ -161,6 +162,7 @@ class InteractiveCube( BaseObject ):
         #   PICKING    #
         self._clicked         = False
         self._picked_poly     = None
+        self._stored_picked_poly = []
         self.picked_position  = None
         self._currentactive   = 0
         self.selected_spaxels = []
@@ -256,8 +258,14 @@ class InteractiveCube( BaseObject ):
         if key_ in ["h","H"]:
             print(DOCUMENTATION)
             return
+        if DEBUG: print("%s becomes True"%key_)
         
-        self.pressed_key[key_] = True
+        # ctrl+alt
+        if key_ == "ctrl+alt":
+            for key__ in ["control","alt"]:
+                self.pressed_key[key__] = True
+        else:
+            self.pressed_key[key_] = True
         
     def inteact_releasekey(self, event):
         """ """
@@ -270,7 +278,15 @@ class InteractiveCube( BaseObject ):
         if key_ is not None:
             key_ = key_.replace(" ","space")
 
-        self.pressed_key[key_] = False
+        if DEBUG: print("%s becomes *False*"%key_)
+        # ctrl+alt
+        if key_ == "ctrl+alt":
+            for key__ in ["control","alt"]:
+                if DEBUG: print("%s becomes *False*"%key__)
+                self.pressed_key[key__] = False
+
+        else:
+            self.pressed_key[key_] = False
         
     # ----------
     # - Click 
@@ -346,7 +362,10 @@ class InteractiveCube( BaseObject ):
             poly = eval("patches.%s(*args)"%(which))
             self.selected_spaxels  = [i for i,id_ in enumerate(self.cube.indexes)
                                         if poly.contains_point( self.cube.index_to_xy(id_)) ]
-            self._picked_poly = None
+            if self._hold:
+                self._stored_picked_poly.append(self._picked_poly)
+            else:
+                self._stored_picked_poly = [self._picked_poly]
             
         # - Simple Picking
         else:
@@ -550,6 +569,8 @@ class InteractiveCube( BaseObject ):
     @property
     def _keyalt(self):
         """ If the control key pressed? """
+        if DEBUG: print("is that Holded?")
+        if DEBUG: print(self.pressed_key.get("alt",False))
         return self.pressed_key.get("alt",False)
 
     @property
