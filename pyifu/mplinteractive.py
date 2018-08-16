@@ -166,7 +166,8 @@ class InteractiveCube( BaseObject ):
         self.picked_position  = None
         self._currentactive   = 0
         self.selected_spaxels = []
-        
+        self._holded_spaxels = []
+        self.current_picked_scatter = []
         #   KEYBOARD   #
         self.pressed_key      = {}
         #   AXIM       #
@@ -179,7 +180,7 @@ class InteractiveCube( BaseObject ):
         """ Clean the Axes and set things back to there initial values """
         self.change_axim_color(None) # Remove selected wavelength
         self._clean_picked_im_() # Remove Spaxels selected
-        if hasattr(self,"current_picked_scatter"):
+        if hasattr(self,"current_picked_scatter") and len(self.current_picked_scatter)>0:
             self.current_picked_scatter.remove()
 
         self.clean_axspec(draw=False) # Clear the Axis
