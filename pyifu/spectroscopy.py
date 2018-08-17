@@ -702,7 +702,8 @@ class Spectrum( SpecSource ):
     # --------- #
     #  PLOTTER  #
     # --------- #
-    def show(self, toshow="data", ax=None, savefile=None, show=True, **kwargs):
+    def show(self, toshow="data", ax=None, savefile=None, show=True,
+                 show_zero=False,**kwargs):
         """ Display the spectrum.
         
         Parameters
@@ -743,11 +744,14 @@ class Spectrum( SpecSource ):
         else:
             fig  = ax.figure
 
+        
         # - Ploting
         spec = eval("self.%s"%toshow)
         var  = self.variance if toshow in ["data", "rawdata"] and self.has_variance() else None
-
+        if show_zero:
+            ax.axhline(0, ls="-", color="0.7", lw=1)
         pl = ax.specplot(self.lbda, spec, var=var, **kwargs)
+        
         # - out
         fig.figout(savefile=savefile, show=show)
         
