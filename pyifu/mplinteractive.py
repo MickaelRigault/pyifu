@@ -423,7 +423,7 @@ class InteractiveCube( BaseObject ):
     # -------- #
     def show_picked_position(self, marker="+", color="k", s=100, zorder=8):
         """ """
-        if hasattr(self,"current_picked_scatter"):
+        if hasattr(self,"current_picked_scatter") and len(self.current_picked_scatter)>0:
             self.current_picked_scatter.remove()
             
         self.current_picked_scatter = self.axim.scatter(*self.picked_position, marker=marker, color=color, s=s, zorder=zorder)

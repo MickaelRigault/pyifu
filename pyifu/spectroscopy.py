@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 import warnings
 import numpy as np
-
 from propobject import BaseObject
 
 
@@ -81,7 +80,7 @@ def get_spectrum(lbda, flux, variance=None, header=None, logwave=None):
     Spectrum
     """
     spec = Spectrum(None)
-    spec.create(data=flux, variance=variance, header=None, lbda=lbda, logwave=logwave)
+    spec.create(data=flux, variance=variance, header=header, lbda=lbda, logwave=logwave)
     return spec
 
 def get_slice(data, xy, spaxel_vertices=None,
@@ -254,7 +253,7 @@ class SpecSource( BaseObject ):
         -------
         Void
         """
-        self.set_header(header)
+        self.set_header( header )
         self.set_data(data, variance, lbda, logwave=logwave)
 
     def set_data(self, data, variance=None, lbda=None, logwave=None):
@@ -610,7 +609,6 @@ class Spectrum( SpecSource ):
                synthesize_photometry(self.lbda, self.variance,
                                          filter_lbda, filter_trans) if self.has_variance() \
                                          and on in ["data","rawdata"] else None
-
 
     def filter(self, new_disp):
         """ apply a Gaussian filtering to the current spectrum and returns a copy of the filtered one 
