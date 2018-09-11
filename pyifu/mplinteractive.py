@@ -359,6 +359,7 @@ class InteractiveCube( BaseObject ):
         """ """
         if event.dblclick:
             return
+        
         # - Region Selection
         if self._picked_poly is not None:
             which, args = self._picked_poly
@@ -369,7 +370,7 @@ class InteractiveCube( BaseObject ):
                 self._stored_picked_poly.append(self._picked_poly)
             else:
                 self._stored_picked_poly = [self._picked_poly]
-            
+            self._picked_poly = None
         # - Simple Picking
         else:
             self.selected_spaxels  = [np.nanargmin([distance.euclidean(self.cube.index_to_xy(i),[event.xdata, event.ydata])
