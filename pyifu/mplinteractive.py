@@ -180,8 +180,11 @@ class InteractiveCube( BaseObject ):
         """ Clean the Axes and set things back to there initial values """
         self.change_axim_color(None) # Remove selected wavelength
         self._clean_picked_im_() # Remove Spaxels selected
-        if hasattr(self,"current_picked_scatter") and len(self.current_picked_scatter)>0:
-            self.current_picked_scatter.remove()
+        if hasattr(self,"current_picked_scatter"):
+            try:
+                self.current_picked_scatter.remove()
+            except:
+                pass # nothing to remove
 
         self.clean_axspec(draw=False) # Clear the Axis
         self.cube._display_spec_(self.axspec, toshow=self.toshow) # Draw new spectra
@@ -353,7 +356,10 @@ class InteractiveCube( BaseObject ):
             else:
                 self._picked_poly = ["Polygon", [[[self._picked_spaxel[0], self._picked_spaxel[1]],
                                                   [self._picked_spaxel[0],event.ydata],
-                                                    [event.xdata,event.ydata], [event.xdata,self._picked_spaxel[1]]]]]
+                                                  [event.xdata,           event.ydata],
+                                                  [event.xdata, self._picked_spaxel[1]]
+                                                ]]
+                                    ]
             
     def _onrelease_axim_(self, event):
         """ """
@@ -424,8 +430,11 @@ class InteractiveCube( BaseObject ):
     # -------- #
     def show_picked_position(self, marker="+", color="k", s=100, zorder=8):
         """ """
-        if hasattr(self,"current_picked_scatter") and len(self.current_picked_scatter)>0:
-            self.current_picked_scatter.remove()
+        if hasattr(self,"current_picked_scatter"):
+            try:
+                self.current_picked_scatter.remove()
+            except:
+                pass # Nothing to do
             
         self.current_picked_scatter = self.axim.scatter(*self.picked_position, marker=marker, color=color, s=s, zorder=zorder)
         

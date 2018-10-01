@@ -10,8 +10,8 @@ MAINTAINER = 'Mickael Rigault'
 MAINTAINER_EMAIL = 'm.rigault@ipnl.in2p3.fr'
 URL = 'https://github.com/MickaelRigault/pyifu'
 LICENSE = 'Apache 2.0'
-DOWNLOAD_URL = 'https://github.com/MickaelRigault/pyifu/0.7'
-VERSION = '0.7.3'
+DOWNLOAD_URL = 'https://github.com/MickaelRigault/pyifu/0.8'
+VERSION = '0.8.0'
 
 try:
     from setuptools import setup, find_packages
@@ -56,6 +56,7 @@ if __name__ == "__main__":
           version=VERSION,
           download_url=DOWNLOAD_URL,
           install_requires=install_requires,
+          scripts=["bin/display_cube.py"],
           packages=packages,
           package_data={},
           classifiers=[

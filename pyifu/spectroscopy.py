@@ -15,7 +15,10 @@ def load_cube(filename,**kwargs):
     -------
     Cube
     """
-    return Cube(filename, **kwargs)
+    from astropy.io.fits import getval
+    if not getval(filename,"EURO3D", False) in [True, "T",'true', "True"]:
+        return Cube(filename, **kwargs)
+    return Cube.load_from_e3d(filename)
 
 def get_cube(data, header=None, variance=None,
               lbda=None, spaxel_mapping=None,
@@ -1050,6 +1053,51 @@ class SpaxelHandler( SpecSource ):
         self.create(data=data, header=self.fits[headerindex].header,
                     variance=variance, lbda=lbda, spaxel_mapping=spaxel_mapping)
 
+    # Old e3d format
+    @staticmethod
+    def load_from_e3d(e3dfile):
+        """ Load a Cube stored as an old, historical e3d format.
+        
+        Returns
+        -------
+        pyifu cube.
+        """
+        from astropy.io import fits
+        if not fits.getval(e3dfile,"EURO3D", False) in [True, "T",'true', "True"]:
+            raise IOError("load_from_e3d only accepts old e3d format This is not one.")
+
+        d1, d2 = fits.open(e3dfile)[1:3]
+        # Spaxel Shape:
+        if d2.data["G_SHAPE"] == "S":
+            spaxel_vertices = (np.asarray([[0,0],[0,1],[1,1],[1,0]]) - (0.5,0.5))*d2.data["G_SIZE1"]*1.01
+            if d2.data["G_ANGLE"] !=0:
+                angl = d2.data["G_ANGLE"]*np.pi/180
+                rot_matrix = np.asarray([[np.cos(angl), np.sin(angl)],[-np.sin(angl),np.cos(angl)]])
+                spaxel_vertices = np.dot(spaxel_vertices,rot_matrix)
+        else:
+            raise NotImplemented("Only square format implemented")
+        # Spaxel Mapping
+        spaxel_mapping = {i:[x,y] for i, x,y in zip(d1.data["SPEC_ID"], d1.data["XPOS"], d1.data["YPOS"])}
+        # Data and Variance
+        data     = np.asarray([d for d in d1.data["DATA_SPE"]], dtype="float").T
+        variance = np.asarray([d for d in d1.data["STAT_SPE"]], dtype="float").T
+        # Wavelength
+        lbda = d1.header['CDELTS']* np.arange(d1.data["SPEC_LEN"][0]) + d1.header['CRVALS']
+        # header
+        header = d1.header
+        #
+        # Creating the cube and returning it
+        #
+        cube = Cube(None)
+        cube.create(data, header=header, variance=variance,
+                    lbda=lbda, spaxel_mapping=spaxel_mapping)
+        if spaxel_vertices is not None:
+            cube.set_spaxel_vertices(spaxel_vertices)
+        
+        return cube
+
+
+        
     def get_spaxels_within_polygon(self, polygon, inclusive=True):
         """ Returns the spaxel within the given polygon. 
         (this uses fraction_of_spaxel_within_polygon, 
