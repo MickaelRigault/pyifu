@@ -15,8 +15,7 @@ def load_cube(filename,**kwargs):
     -------
     Cube
     """
-    from astropy.io.fits import getval
-    if not getval(filename,"EURO3D", False) in [True, "T",'true', "True"]:
+    if not is_old_e3dformat(filename):
         return Cube(filename, **kwargs)
     return Cube.load_from_e3d(filename)
 
@@ -151,6 +150,12 @@ def synthesize_photometry(lbda, flux, filter_lbda, filter_trans,
 def is_arraylike(a):
     """ Tests if 'a' is an array / list / tuple """
     return isinstance(a, (list, tuple, np.ndarray) )
+
+def is_old_e3dformat(filename):
+    """ """
+    from astropy.io.fits import getheader
+    header = getheader(filename)
+    return "EURO3D" in header and header["EURO3D"] in [True, "T",'true', "True"]
 
 ##########################
 #                        #
@@ -1063,7 +1068,7 @@ class SpaxelHandler( SpecSource ):
         pyifu cube.
         """
         from astropy.io import fits
-        if not fits.getval(e3dfile,"EURO3D", False) in [True, "T",'true', "True"]:
+        if not is_old_e3dformat(e3dfile):
             raise IOError("load_from_e3d only accepts old e3d format This is not one.")
 
         d1, d2 = fits.open(e3dfile)[1:3]
@@ -1093,7 +1098,10 @@ class SpaxelHandler( SpecSource ):
                     lbda=lbda, spaxel_mapping=spaxel_mapping)
         if spaxel_vertices is not None:
             cube.set_spaxel_vertices(spaxel_vertices)
-        
+            
+        cube._side_properties["filename"] = filename
+        cube._side_properties["fits"]     = fits.open(filename)
+
         return cube
 
 
