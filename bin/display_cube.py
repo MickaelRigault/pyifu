@@ -26,7 +26,14 @@ if  __name__ == "__main__":
     
     parser.add_argument('--nskyspaxels',  type=int, default=None,
                         help='Number of faintest spaxels used to estimate the sky. Default 10% of spaxels')
+
+    # // Ploting
+    parser.add_argument('--vmin',  type=str, default="2",
+                        help='Data Percentage used for imshow "vmin" when using the --display mode')
     
+    parser.add_argument('--vmax',  type=str, default="98",
+                        help='Data Percentage used for imshow "vmax" when using the --display mode')
+
     args = parser.parse_args()
     # ================= #
     #  The Scripts      #
@@ -40,4 +47,4 @@ if  __name__ == "__main__":
                                           usemean=False)
         cube.remove_flux( cube._sky.data)
 
-    cube.show(interactive=True, notebook=False)
+    cube.show(interactive=True, notebook=False, vmin=args.vmin, vmax=args.vmax)

@@ -681,6 +681,7 @@ class Spectrum( SpecSource ):
         var_  = interp1d(self.lbda, self.variance, kind=kind, fill_value="extrapolate", **kwargs)(new_lbda) \
           if self.has_variance() else None
         spec_ = self.copy()
+        spec_._derived_properties["data"] = None
         spec_.create(data_, lbda=new_lbda, variance=var_, header=self.header.copy())
         return spec_
 
@@ -1071,23 +1072,37 @@ class SpaxelHandler( SpecSource ):
         if not is_old_e3dformat(e3dfile):
             raise IOError("load_from_e3d only accepts old e3d format This is not one.")
 
-        d1, d2 = fits.open(e3dfile)[1:3]
+        fitsfile = fits.open(e3dfile)
+        d1, d2 = fitsfile[1:3]
         # Spaxel Shape:
         if d2.data["G_SHAPE"] == "S":
-            spaxel_vertices = (np.asarray([[0,0],[0,1],[1,1],[1,0]]) - (0.5,0.5))*d2.data["G_SIZE1"]*1.01
+            spaxel_vertices = (np.asarray([[0,0],[0,1],[1,1],[1,0]]) - (0.5,0.5))
+            spaxel_size = d2.data["G_SIZE1"]
             if d2.data["G_ANGLE"] !=0:
                 angl = d2.data["G_ANGLE"]*np.pi/180
                 rot_matrix = np.asarray([[np.cos(angl), np.sin(angl)],[-np.sin(angl),np.cos(angl)]])
                 spaxel_vertices = np.dot(spaxel_vertices,rot_matrix)
         else:
             raise NotImplemented("Only square format implemented")
-        # Spaxel Mapping
-        spaxel_mapping = {i:[x,y] for i, x,y in zip(d1.data["SPEC_ID"], d1.data["XPOS"], d1.data["YPOS"])}
-        # Data and Variance
-        data     = np.asarray([d for d in d1.data["DATA_SPE"]], dtype="float").T
-        variance = np.asarray([d for d in d1.data["STAT_SPE"]], dtype="float").T
+
+        # Data, Variance and Spaxel Mapping
+        size     = d1.data["SPEC_LEN"][0]
+        data, variance = [],[]
+        spaxel_mapping = {}
+        for i, d_, var_,x_,y_ in zip(np.sort(d1.data["SPEC_ID"]),
+                                         d1.data["DATA_SPE"],d1.data["STAT_SPE"],
+                                        d1.data["XPOS"]/spaxel_size, d1.data["YPOS"]/spaxel_size):
+            if len(d_)!=size:
+                continue
+            data.append(d_)
+            variance.append(var_)
+            spaxel_mapping[i] = [x_,y_]
+
+        data = np.asarray(data, dtype="float").T
+        variance = np.asarray(variance, dtype="float").T
         # Wavelength
-        lbda = d1.header['CDELTS']* np.arange(d1.data["SPEC_LEN"][0]) + d1.header['CRVALS']
+        lbda = d1.header['CDELTS']* np.arange(size) + d1.header['CRVALS']
+
         # header
         header = d1.header
         #
@@ -1098,9 +1113,9 @@ class SpaxelHandler( SpecSource ):
                     lbda=lbda, spaxel_mapping=spaxel_mapping)
         if spaxel_vertices is not None:
             cube.set_spaxel_vertices(spaxel_vertices)
-            
-        cube._side_properties["filename"] = filename
-        cube._side_properties["fits"]     = fits.open(filename)
+        cube.spaxel_size = spaxel_size
+        cube._side_properties["filename"] = e3dfile
+        cube._side_properties["fits"]     = fitsfile
 
         return cube
 
