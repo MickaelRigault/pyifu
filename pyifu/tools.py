@@ -188,7 +188,7 @@ def colorbar(ax,cmap,vmin=0,vmax=1,label="",
 
 @make_method(mpl.Axes)
 def specplot(ax,x,y,var=None,
-             color=None,bandprop={},
+             color=None, bandprop={},
              err_onzero=False,**kwargs):
     """This function in a build-in axes method that enable to quickly and
     easily plot a spectrum.

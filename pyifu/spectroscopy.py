@@ -634,6 +634,7 @@ class Spectrum( SpecSource ):
         data_ = gaussian_filter(self.data, new_disp)
         var_  = gaussian_filter(self.variance, new_disp) if self.has_variance() else None
         spec_ = self.copy()
+        spec_._derived_properties["data"] = None
         spec_.create(data_, lbda=self.lbda, variance=var_, header=self.header.copy())
         return spec_
         
@@ -1334,18 +1335,24 @@ class Slice( SpaxelHandler ):
         else:
             fig = ax.figure
 
-        value = np.asarray(eval("self.%s"%toshow))
-        # - which colors
-        if vmin is None:
-            vmin = np.percentile(value[value==value],0)
-        elif type(vmin) == str:
-            vmin = np.percentile(value[value==value],float(vmin))
-        if vmax is None:
-            vmax = np.percentile(value[value==value],100)
-        elif type(vmax) == str:
-            vmax = np.percentile(value[value==value],float(vmax))
+        value = np.asarray( eval("self.%s"%toshow) ) if toshow is not None else None
+        if value is None or np.all(np.isnan(value)):
+            colors = ["None"]*self.nspaxels
+            if "edgecolor" not in kwargs:
+                kwargs["edgecolor"] = 0.7
+            show_colorbar = False
+        else:
+            # - which colors
+            if vmin is None:
+                vmin = np.percentile(value[value==value],0)
+            elif type(vmin) == str:
+                vmin = np.percentile(value[value==value],float(vmin))
+            if vmax is None:
+                vmax = np.percentile(value[value==value],100)
+            elif type(vmax) == str:
+                vmax = np.percentile(value[value==value],float(vmax))
                 
-        colors = mpl.cm.viridis((value-vmin)/(vmax-vmin))
+            colors = mpl.cm.viridis((value-vmin)/(vmax-vmin))
         
         x,y = np.asarray(self.index_to_xy(self.indexes)).T
     
