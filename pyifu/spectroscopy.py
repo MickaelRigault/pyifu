@@ -852,6 +852,10 @@ class SpaxelHandler( SpecSource ):
         -------
         Void
         """
+        if spaxel_mapping is None and hasattr(self, "spaxel_mapping"):
+            if len(data) != self.nspaxels or (variance is not None and len(variance) != self.nspaxels):
+                raise ValueError("size of data and/or variance (if any) does not match that of existing spaxel_mapping")
+            
         # - 3d data
         self._properties["rawdata"] = np.asarray(data)
         # - Variance
@@ -860,7 +864,8 @@ class SpaxelHandler( SpecSource ):
                 raise TypeError("variance and data do not have the same shape")
             self._properties["variance"] = np.asarray(variance)
 
-        self.set_spaxel_mapping(spaxel_mapping)
+        if spaxel_mapping is not None or not hasattr(self, "spaxel_mapping"):
+            self.set_spaxel_mapping(spaxel_mapping)
         
         # - Wavelength
         if lbda is not None:
@@ -1213,9 +1218,49 @@ class SpaxelHandler( SpecSource ):
             
         wmap  = self.fraction_of_spaxel_within_polygon(aperture)
         return np.nansum(self.data*wmap), np.nansum(self.variance*wmap**2), np.nansum(wmap)
-    
 
-    def index_to_xy(self, index):
+    def rotate(self, angle, rot_centroid=[0,0], inplace=False):
+        """ returns a copy of this object but rotated.
+
+        Parameters:
+        -----------
+        angle: float
+            rotation angle in radian.
+            N.B: positive means natural direction, i.e. counter clock wise.
+
+        rot_centroid: [float,float] -optional-
+            Coordinate (x,y) of the rotation axis. 
+
+        inplace: [bool] -optional-
+            A rotated copy of the current object will be returned
+            except if inplace is set to True. If so, the current object will
+            be affected by the rotation and nothing will be retured.
+
+        Returns
+        -------
+        rotated Copy (Void if inplace=True, see doc.)
+        """
+        # What should it affect ?
+        sp_ = self.copy() if not inplace else self
+        # Rotate the centroids and the vertices
+        spaxels_xy = np.asarray( self.index_to_xy(self.indexes) )
+        rotmat     = np.asarray([[np.cos(angle), -np.sin(angle)],[np.sin(angle), np.cos(angle)]])
+        spaxels_xy = np.dot(rotmat, (spaxels_xy-rot_centroid).T).T + rot_centroid
+        vertices   = np.dot(rotmat, self.spaxel_vertices.T).T
+        # Set it back in
+        sp_.set_spaxel_mapping({i:c_ for i,c_ in zip(self.indexes, spaxels_xy)})
+        sp_.set_spaxel_vertices(vertices)
+        # Return if needed
+        if not inplace:
+            return sp_
+
+
+    def get_index_vertices(self, index):
+        """ """
+        return np.asarray([self.spaxel_vertices + np.asarray( self.index_to_xy(index_, fill_with=np.NaN) )
+                               for index_ in np.atleast_1d(index)])
+    
+    def index_to_xy(self, index, fill_with=None):
         """ Each spaxel has a unique index (1d-array) entry.
         This tools enables to know what is the 2D (x,y) position 
         of this index
@@ -1229,7 +1274,7 @@ class SpaxelHandler( SpecSource ):
         
         if index in self.spaxel_mapping:
             return self.spaxel_mapping[index]
-        return None, None
+        return fill_with, fill_with
 
     def xy_to_index(self, xy):
         """ Each spaxel has a unique x,y, location that 
@@ -1318,8 +1363,8 @@ class Slice( SpaxelHandler ):
     """ """
     def show(self, toshow="data", ax = None, savefile=None, show=True,
                  vmin=None, vmax=None, show_colorbar=True,
-                 clabel="",cfontsize="large",
-                 **kwargs):
+                 clabel="",cfontsize="large", empty_if_nan=True,
+                 alpha=0.8, ec="0.5", lw=0, **kwargs):
         """ display on the IFU hexagonal grid the given values
         
         Parameters
@@ -1337,9 +1382,6 @@ class Slice( SpaxelHandler ):
 
         value = np.asarray( eval("self.%s"%toshow) ) if toshow is not None else None
         if value is None or np.all(np.isnan(value)):
-            colors = ["None"]*self.nspaxels
-            if "edgecolor" not in kwargs:
-                kwargs["edgecolor"] = 0.7
             show_colorbar = False
         else:
             # - which colors
@@ -1353,16 +1395,20 @@ class Slice( SpaxelHandler ):
                 vmax = np.percentile(value[value==value],float(vmax))
                 
             colors = mpl.cm.viridis((value-vmin)/(vmax-vmin))
-        
+            
+                
         x,y = np.asarray(self.index_to_xy(self.indexes)).T
     
         # - The Patchs
-        ps = [patches.Polygon(self.spaxel_vertices+np.asarray([x[i],y[i]]),
-                                facecolor=colors[i], alpha=0.8,**kwargs)
-              for i  in range(self.nspaxels)]
-        ip = [ax.add_patch(p_) for p_ in ps]
-        ax.autoscale(True, tight=True)
+        for i in range(self.nspaxels):
+            c_ = "None" if value is None or (np.isnan(value[i]) and empty_if_nan) else colors[i] 
+            linewidth = 1 if c_ == "None" and lw==0 else lw           
+            ax.add_patch(patches.Polygon(self.spaxel_vertices+np.asarray([x[i],y[i]]),
+                                facecolor=c_, alpha=alpha, linewidth=linewidth, edgecolor=ec,
+                                  **kwargs))
 
+        if show:
+            ax.autoscale(True, tight=True)
             
         if show_colorbar:
             from .tools import colorbar, insert_ax
