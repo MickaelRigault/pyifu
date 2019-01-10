@@ -165,9 +165,9 @@ def is_old_e3dformat(filename):
 class SpecSource( BaseObject ):
     """ Virtual Object that contains the similaties between Spectrum and Cube. """
     
-    PROPERTIES         = ["rawdata","variance","lbda","header"]
+    PROPERTIES         = ["rawdata","rawvariance","lbda","header"]
     SIDE_PROPERTIES    = ["filename","fits","header"]
-    DERIVED_PROPERTIES = ["data","spec_prop"]
+    DERIVED_PROPERTIES = ["data","variance","spec_prop"]
     
     def __init__(self,filename,
                  dataindex=0,
@@ -222,7 +222,26 @@ class SpecSource( BaseObject ):
 
     def load(self,  filename, dataindex=0, varianceindex=1, headerindex=None):
         raise NotImplementedError("Load method not implemented for SpecSources")
-    
+
+    def scale_by(self, coef):
+        """ divide the data by the given scaling factor 
+        If this object has a variance attached, the variance will be divided by the square of `coef`.
+        Parameters
+        ----------
+        coef: [float or array of]
+            scaling factor for the data 
+
+        Returns
+        -------
+        Void, affect the object (data, variance)
+        """
+        if not is_arraylike(coef) or len(coef)==1 or len(coef) == len(self.data):
+            
+            self._derived_properties["data"]  = self.rawdata / coef
+            if self.has_variance():
+                self._derived_properties["variance"]  = self.rawvariance / coef**2
+        else:
+            raise ValueError("scale_by is not able to parse the shape of coef.", np.shape(coef))
     # -------- #
     #  SETTER  #
     # -------- #
@@ -298,7 +317,7 @@ class SpecSource( BaseObject ):
         if variance is not None:
             if np.shape(variance) != np.shape(data):
                 raise TypeError("variance and data do not have the same shape")
-            self._properties["variance"] = np.asarray(variance)
+            self._properties["rawvariance"] = np.asarray(variance)
             
         # - Wavelength
         if lbda is not None:
@@ -383,13 +402,20 @@ class SpecSource( BaseObject ):
         return self.rawdata is not None
 
     @property
+    def rawvariance(self):
+        """ """
+        return self._properties["rawvariance"]
+    
+    @property
     def variance(self):
         """ """
-        return self._properties["variance"]
+        if self._derived_properties["variance"] is None:
+            return self.rawvariance
+        return self._derived_properties["variance"]
     
     def has_variance(self):
         """ Tests if a variance has been set. True means yes. """
-        return self.variance is not None
+        return self.rawvariance is not None
 
     # - derived
     @property
@@ -685,27 +711,6 @@ class Spectrum( SpecSource ):
         spec_._derived_properties["data"] = None
         spec_.create(data_, lbda=new_lbda, variance=var_, header=self.header.copy())
         return spec_
-
-    def scale_by(self, coef):
-        """ divide the data by the given scaling factor 
-        If this object has a variance attached, the variance will be divided by the square of `coef`.
-        Parameters
-        ----------
-        coef: [float or array of]
-            scaling factor for the data 
-
-        Returns
-        -------
-        Void, affect the object (data, variance)
-        """
-        if not is_arraylike(coef) or len(coef)==1 or len(coef) == len(self.data):
-            
-            self._derived_properties["data"]  = self.data / coef
-            if self.has_variance():
-                self._properties["variance"]  = self.variance / coef**2
-        else:
-            raise ValueError("scale_by is not able to parse the shape of coef.", np.shape(coef))
-
         
     # --------- #
     #  PLOTTER  #
@@ -862,7 +867,7 @@ class SpaxelHandler( SpecSource ):
         if variance is not None:
             if np.shape(variance) != np.shape(data):
                 raise TypeError("variance and data do not have the same shape")
-            self._properties["variance"] = np.asarray(variance)
+            self._properties["rawvariance"] = np.asarray(variance)
 
         if spaxel_mapping is not None or not hasattr(self, "spaxel_mapping"):
             self.set_spaxel_mapping(spaxel_mapping)
@@ -1299,6 +1304,34 @@ class SpaxelHandler( SpecSource ):
             return [i for i,v in self.spaxel_mapping.items() if v == xy]
         return [i for i,v in self.spaxel_mapping.items() if np.any(v in xy)]
 
+    def display_contours(self, ax=None, buffer=0.001, facecolor="None", edgecolor="0.7",
+                             zorder=None, autoscale=True, **kwargs):
+        """ """
+        import matplotlib.pyplot as mpl
+        from matplotlib import patches
+        from shapely import geometry
+        from shapely.ops import cascaded_union
+
+        if ax is None:
+            fig = mpl.figure(figsize=[6,5])
+            ax  = fig.add_subplot(111)
+        else:
+            fig = ax.figure
+
+        
+        spaxels = [geometry.Polygon(v_).buffer(buffer) for v_ in self.get_index_vertices(self.indexes) if not np.any(np.isnan(v_))]
+    
+        MLA = cascaded_union(spaxels)
+        vertices = np.asarray(MLA.exterior.xy).T
+        # Add it to SDSS image
+        p = patches.Polygon( vertices, facecolor=facecolor, edgecolor=edgecolor, zorder=zorder, **kwargs)
+        ax.add_patch(p)
+        
+        if autoscale:
+            ax.autoscale(True, tight=True)
+            
+        return MLA
+    
     # =================== #
     #   Properties        #
     # =================== #
@@ -1499,7 +1532,8 @@ class Cube( SpaxelHandler ):
     # --------- #
     #  SLICES   #
     # --------- #
-    def get_slice(self, lbda_min=None, lbda_max=None, index=None,
+    def get_slice(self, lbda_trans=None,
+                      lbda_min=None, lbda_max=None, index=None,
                       usemean=True, data="data",
                       slice_object=False):
         """ Returns a array containing the [weighted] average for the 
@@ -1508,6 +1542,11 @@ class Cube( SpaxelHandler ):
         
         Parameters
         ----------
+        lbda_trans: [None or [float, float] -optional-
+            Provide here the wavelength and transmission of the filter you want to apply
+            to the data. 
+            i.e: lbda_trans = [lbda_filter, trans_filter]
+
         lbda_min, lbda_max: [None or float] -required if not index-
             lower and higher boundaries of the wavelength (in Angstrom) defining the slice.
             None means no limit.
@@ -1534,7 +1573,20 @@ class Cube( SpaxelHandler ):
         -------
         array of float
         """
-        if index is not None:
+        if lbda_trans is not None:
+            try:
+                lbda_f, trans_f = lbda_trans
+            except:
+                raise ValueError("lbda_trans must be a 2D array if not None; lbda_f, trans_f = lbda_trans")
+            slice_data = [synthesize_photometry(self.lbda, self.get_index_data(i),
+                                                                 lbda_f, trans_f)
+                              for i in range(self.nspaxels)]
+            slice_var  = [synthesize_photometry(self.lbda, self.get_index_data(i, "variance"),
+                                                                 lbda_f, trans_f)
+                              for i in range(self.nspaxels)]
+            lbda = np.average(lbda_f, weights=trans_f)
+    
+        elif index is not None:
             slice_data = eval("self.%s[%d]"%(data,index))
             slice_var  = None if data not in ['data','rawdata'] or not self.has_variance()\
               else eval("self.variance[%d]"%(index))
@@ -1709,7 +1761,7 @@ class Cube( SpaxelHandler ):
         # ------------------- #
         #  Data To be Sorted  #
         # ------------------- #
-        mean_data   = self.get_slice(lbda_range[0],lbda_range[1], data=data, **kwargs)
+        mean_data   = self.get_slice(lbda_min=lbda_range[0],lbda_max=lbda_range[1], data=data, **kwargs)
         if descending:
             mean_data *=-1
             
@@ -1871,14 +1923,14 @@ class Cube( SpaxelHandler ):
         """
         if not is_arraylike(coef) or len(coef)==1 or len(coef) == self.data.shape[1] or np.shape(coef)==self.data.shape:
             
-            self._derived_properties["data"]  = self.data / coef
+            self._derived_properties["data"]  = self.rawdata / coef
             if self.has_variance():
-                self._properties["variance"]  = self.variance / coef**2
+                self._derived_properties["variance"]  = self.rawvariance / coef**2
                 
         elif len(coef) == self.data.shape[0]:
-            self._derived_properties["data"]  = np.asarray(self.data.T / coef).T
+            self._derived_properties["data"]  = np.asarray(self.rawdata.T / coef).T
             if self.has_variance():
-                self._properties["variance"]  = np.asarray(self.variance.T / coef**2).T
+                self._derived_properties["variance"]  = np.asarray(self.rawvariance.T / coef**2).T
         else:
             raise ValueError("scale_by is not able to parse the shape of coef.", np.shape(coef), self.data.shape)
             
@@ -2061,7 +2113,7 @@ class Cube( SpaxelHandler ):
             raise TypeError("lbdalim must be None or [min/max]")
         
         # - Scaling used
-        mean_flux = self.get_slice(lbdalim[0], lbdalim[1], data=toshow, **kwargs)
+        mean_flux = self.get_slice(lbda_min=lbdalim[0], lbda_max=lbdalim[1], data=toshow, **kwargs)
         
         # - vmin / vmax trick
         vmin = np.nanpercentile(mean_flux, 0.5) if vmin is None else \
