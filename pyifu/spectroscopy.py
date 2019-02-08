@@ -1395,7 +1395,7 @@ class SpaxelHandler( SpecSource ):
 class Slice( SpaxelHandler ):
     """ """
     def show(self, toshow="data", ax = None, savefile=None, show=True,
-                 vmin=None, vmax=None, show_colorbar=True,
+                 vmin=None, vmax=None, show_colorbar=True, cmap=None,
                  clabel="",cfontsize="large", empty_if_nan=True,
                  alpha=0.8, ec="0.5", lw=0, **kwargs):
         """ display on the IFU hexagonal grid the given values
@@ -1417,6 +1417,7 @@ class Slice( SpaxelHandler ):
         if value is None or np.all(np.isnan(value)):
             show_colorbar = False
         else:
+            cmap = mpl.cm.get_cmap(cmap)
             # - which colors
             if vmin is None:
                 vmin = np.percentile(value[value==value],0)
@@ -1427,7 +1428,7 @@ class Slice( SpaxelHandler ):
             elif type(vmax) == str:
                 vmax = np.percentile(value[value==value],float(vmax))
                 
-            colors = mpl.cm.viridis((value-vmin)/(vmax-vmin))
+            colors = cmap((value-vmin)/(vmax-vmin))
             
                 
         x,y = np.asarray(self.index_to_xy(self.indexes)).T
@@ -1446,7 +1447,7 @@ class Slice( SpaxelHandler ):
         if show_colorbar:
             from .tools import colorbar, insert_ax
             axcbar = ax.insert_ax("right", shrunk=0.88)
-            axcbar.colorbar(mpl.cm.viridis,vmin=vmin,vmax=vmax,label=clabel,
+            axcbar.colorbar(cmap, vmin=vmin, vmax=vmax, label=clabel,
                     fontsize=cfontsize)
     
         fig.figout(savefile=savefile, show=show)
