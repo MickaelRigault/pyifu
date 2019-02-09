@@ -1397,6 +1397,7 @@ class Slice( SpaxelHandler ):
     def show(self, toshow="data", ax = None, savefile=None, show=True,
                  vmin=None, vmax=None, show_colorbar=True, cmap=None,
                  clabel="",cfontsize="large", empty_if_nan=True,
+                 autoscale=True,
                  alpha=0.8, ec="0.5", lw=0, **kwargs):
         """ display on the IFU hexagonal grid the given values
         
@@ -1441,7 +1442,7 @@ class Slice( SpaxelHandler ):
                                 facecolor=c_, alpha=alpha, linewidth=linewidth, edgecolor=ec,
                                   **kwargs))
 
-        if show:
+        if show or autoscale:
             ax.autoscale(True, tight=True)
             
         if show_colorbar:
