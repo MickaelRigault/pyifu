@@ -223,7 +223,7 @@ class SpecSource( BaseObject ):
     def load(self,  filename, dataindex=0, varianceindex=1, headerindex=None):
         raise NotImplementedError("Load method not implemented for SpecSources")
 
-    def scale_by(self, coef):
+    def scale_by(self, coef, onraw=True):
         """ divide the data by the given scaling factor 
         If this object has a variance attached, the variance will be divided by the square of `coef`.
         Parameters
@@ -231,15 +231,18 @@ class SpecSource( BaseObject ):
         coef: [float or array of]
             scaling factor for the data 
 
+        onraw: [bool] -optional-
+            scaley from rawdata or from data (that could already be scaled)
+
         Returns
         -------
         Void, affect the object (data, variance)
         """
         if not is_arraylike(coef) or len(coef)==1 or len(coef) == len(self.data):
             
-            self._derived_properties["data"]  = self.rawdata / coef
+            self._derived_properties["data"]  = self.rawdata / coef if onraw else self.data / coef
             if self.has_variance():
-                self._derived_properties["variance"]  = self.rawvariance / coef**2
+                self._derived_properties["variance"]  = self.rawvariance / coef**2 if onraw else self.variance / coef
         else:
             raise ValueError("scale_by is not able to parse the shape of coef.", np.shape(coef))
     # -------- #
@@ -868,7 +871,8 @@ class SpaxelHandler( SpecSource ):
             if np.shape(variance) != np.shape(data):
                 raise TypeError("variance and data do not have the same shape")
             self._properties["rawvariance"] = np.asarray(variance)
-
+            self._derived_properties["variance"] = None
+            
         if spaxel_mapping is not None or not hasattr(self, "spaxel_mapping"):
             self.set_spaxel_mapping(spaxel_mapping)
         
@@ -1697,6 +1701,7 @@ class Cube( SpaxelHandler ):
 
         spaxel_mapping = {id_:self.spaxel_mapping[id_] for id_ in indexes}
         copy_cube = self.copy()
+        
         copy_cube.create(rawdata, variance=var, header=self.header,
                         lbda=self.lbda[slice_id],
                         spaxel_mapping=spaxel_mapping)
@@ -1911,7 +1916,7 @@ class Cube( SpaxelHandler ):
 
         self._derived_properties["data"] = np.asarray(eval("self.%s.T"%(remove_from)) - flux).T
         
-    def scale_by(self, coef):
+    def scale_by(self, coef, onraw=True):
         """ divide the data by the given scaling factor 
         If this object has a variance attached, the variance will be divided by the square of `coef`.
         Parameters
@@ -1919,20 +1924,26 @@ class Cube( SpaxelHandler ):
         coef: [float or array of]
             scaling factor for the data 
 
+        onraw: [bool] -optional-
+            scaley from rawdata or from data (that could already be scaled)
+
         Returns
         -------
         Void, affect the object (data, variance)
         """
+        data     = self.rawdata if onraw else self.data
+        variance = self.rawvariance if onraw else self.variance
+        
+        
         if not is_arraylike(coef) or len(coef)==1 or len(coef) == self.data.shape[1] or np.shape(coef)==self.data.shape:
-            
-            self._derived_properties["data"]  = self.rawdata / coef
+            self._derived_properties["data"]  = data / coef
             if self.has_variance():
-                self._derived_properties["variance"]  = self.rawvariance / coef**2
+                self._derived_properties["variance"]  = variance / coef**2
                 
         elif len(coef) == self.data.shape[0]:
-            self._derived_properties["data"]  = np.asarray(self.rawdata.T / coef).T
+            self._derived_properties["data"]  = np.asarray(data.T / coef).T
             if self.has_variance():
-                self._derived_properties["variance"]  = np.asarray(self.rawvariance.T / coef**2).T
+                self._derived_properties["variance"]  = np.asarray(variance.T / coef**2).T
         else:
             raise ValueError("scale_by is not able to parse the shape of coef.", np.shape(coef), self.data.shape)
             
