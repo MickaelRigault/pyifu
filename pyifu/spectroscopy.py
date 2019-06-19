@@ -144,6 +144,43 @@ def synthesize_photometry(lbda, flux, filter_lbda, filter_trans,
       
     return integrate_photons(lbda,flux,None,filter_lbda,filter_trans)/normband
 
+# ----------- #
+# Redshifting #
+# ----------- #
+def deredshift(x, y, z, variance=None, exp=3):
+    """Deredshift spectrum from z to 0, and apply a (1+z)**exp
+    flux-correction.
+
+    exp=3 is for erg/s/cm2/A spectra to be latter corrected using proper
+    (comoving) distance but *not* luminosity distance.
+
+    Parameters
+    ----------
+    x,y : [array]
+        wavelength and flux or the spectrum. 
+        y is expected in erg/s/cm2/A (so x in A)
+
+    variance: [array] -optional-
+        spectral variance if any (square of flux units.)
+
+    exp: [float] -optional-
+        exposant for the redshift flux dilution 
+        [exp=3 is for erg/s/cm2/A spectra]
+
+    Returns
+    -------
+    arrays (x, y [and variance if any] corresponding to the deredshifted spectrum)
+
+    """
+    zp1 = 1 + z
+    x_rest = x/zp1           # Wavelength correction
+    y_rest = y*(zp1**exp)      # Flux correction
+    if variance is not None:
+        variance_rest = variance*(zp1**exp)**2
+
+    return (x_rest, y_rest , variance_rest) if variance is not None else (x_rest, y_rest)
+
+
 
 
 # Not in .tools.py to avoid loading matplotlib.

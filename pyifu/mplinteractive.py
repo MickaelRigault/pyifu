@@ -222,10 +222,23 @@ class InteractiveCube( BaseObject ):
     # -------------- #
     #  Information   #
     # -------------- #
-    def get_selected_idx(self):
+    def get_selected_idx(self, spaxel_indexes=False):
         """ return the index of the selected spaxels 
         (see the  spaxel_mapping method from cube for corresponding information) 
+
+        Parameters
+        ----------
+        spaxel_indexes: [bool]
+            Indexes you want. 
+            True: cube spaxels indexes, such that: selected_spec = cube.get_spectrum( this.get_selected_idx(True))
+            False: index of the spaxels (starts to 0)
+            
+        Returns
+        -------
+        list of indexes
         """
+        if spaxel_indexes:
+            return self.selected_spaxels
         return np.asarray(self.cube.indexes)[self.selected_spaxels] if len(self.selected_spaxels)>0 else []
     
     # ----------
