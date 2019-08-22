@@ -6,7 +6,7 @@ from scipy.spatial import distance
 import matplotlib
 from matplotlib import patches
 import matplotlib.pyplot as mpl
-
+import time
 from propobject    import BaseObject
 from .tools        import kwargs_update
 
@@ -162,6 +162,8 @@ class InteractiveCube( BaseObject ):
         #   PICKING    #
         self._clicked         = False
         self._picked_poly     = None
+        self._click_time      = time.time()
+        self._isdoubleclick    = False
         self._stored_picked_poly = []
         self.picked_position  = None
         self._currentactive   = 0
@@ -339,15 +341,22 @@ class InteractiveCube( BaseObject ):
     # - axim
     def _onclick_axim_(self, event):
         """ """
-        
-        if event.dblclick:
+        # sometime dblclick fails
+        self._dtime = np.abs(time.time()-self._click_time) # abs useless
+        self._click_time = time.time()
+        self._isdoubleclick   = False
+        if self._dtime<0.5:
+            self._isdoubleclick  = True
             self.picked_position = event.xdata, event.ydata
+            self._clean_picked_im_(only_latest=True)
+            self._clean_spec_axspec_(only_latest=True)
             self.show_picked_position()
         else:
-            self._clicked = True
+            self._clicked         = True
             self._picked_spaxel   = [event.xdata, event.ydata]
             self._tracked_spaxel  = []
-
+            
+        self._click_time = time.time()
         
     def _ontrack_axim_(self, event):
         """ What happen with the mouse goes over the axis?"""
@@ -376,7 +385,7 @@ class InteractiveCube( BaseObject ):
             
     def _onrelease_axim_(self, event):
         """ """
-        if event.dblclick:
+        if self._isdoubleclick:
             return
         
         # - Region Selection
@@ -392,8 +401,9 @@ class InteractiveCube( BaseObject ):
             self._picked_poly = None
         # - Simple Picking
         else:
-            self.selected_spaxels  = [np.nanargmin([distance.euclidean(self.cube.index_to_xy(i),[event.xdata, event.ydata])
-                                                        if not np.any(np.isnan(self.cube.index_to_xy(i))) else np.inf
+            self.selected_spaxels  = [np.nanargmin([distance.euclidean(self.cube.index_to_xy(i),
+                                                                    [event.xdata, event.ydata])
+                                    if not np.any(np.isnan(self.cube.index_to_xy(i))) else np.inf
                                                     for i in self.cube.indexes])]
             
         # - What to do with the selected spaxels
@@ -449,7 +459,8 @@ class InteractiveCube( BaseObject ):
             except:
                 pass # Nothing to do
             
-        self.current_picked_scatter = self.axim.scatter(*self.picked_position, marker=marker, color=color, s=s, zorder=zorder)
+        self.current_picked_scatter = \
+          self.axim.scatter(*self.picked_position, marker=marker, color=color, s=s, zorder=zorder)
         
     def show_picked_spaxels(self):
         """ """
@@ -466,19 +477,22 @@ class InteractiveCube( BaseObject ):
             
         self._holded_spaxels.append(self.selected_spaxels)
         
-    def _clean_picked_im_(self):
+    def _clean_picked_im_(self, only_latest=False):
         """ Removes the changes that have been made """
         if not hasattr(self, "_holded_spaxels"):
             self._holded_spaxels = []
             return
-        self._currentactive = 0
-        for older_spaxels in self._holded_spaxels:
+        self._currentactive = 0 if not only_latest else self._currentactive-1
+        spaxels_to_rm = self._holded_spaxels if not only_latest else [self._holded_spaxels[-1]]
+        for older_spaxels in spaxels_to_rm:
             for p in older_spaxels:
                 self._spaxels[p].set_zorder(self._default_z_order_spaxels)
                 self._spaxels[p].set_linewidth(self._default_linewidth_spaxels)
                 self._spaxels[p].set_edgecolor(self.property_backup[self.axim]["default_edgecolor"])
-                
-        self._holded_spaxels = []
+        if not only_latest:
+            self._holded_spaxels = []
+        else:
+            self._holded_spaxels = self._holded_spaxels[:-1]
         
     # -------- #
     #  axspec  #
@@ -520,10 +534,14 @@ class InteractiveCube( BaseObject ):
         if draw:
             self._draw_()
         
-    def _clean_spec_axspec_(self):
+    def _clean_spec_axspec_(self, only_latest=False):
         """ """
-        self.axspec.lines = [] # remove the spectra lines
-        self.axspec.collections = [] # and their variance
+        if not only_latest:
+            self.axspec.lines = [] # remove the spectra lines
+            self.axspec.collections = [] # and their variance
+        else:
+            self.axspec.lines = self.axspec.lines[:-1] # remove the spectra lines
+            self.axspec.collections = self.axspec.collections[:-1] # and their variance
         
     def _clean_wave_axspec_(self):
         """ Remove the selected wavelength """
