@@ -1435,6 +1435,64 @@ class SpaxelHandler( SpecSource ):
 
 class Slice( SpaxelHandler ):
     """ """
+    # ================= #
+    #  I/O              #
+    # ================= #
+    @classmethod
+    def from_cubefile(cls, filename, lbdarange=[6000,8000]):
+        """ """
+        from astropy.io import fits
+        with fits.open(filename) as f:
+            # Loading header and lbda
+            header = f["PRIMARY"].header
+            lbda = np.arange(header["NAXIS2"])*header["CDELT1"] + header["CRVAL1"]
+            flagin = (lbda>lbdarange[0]) & (lbda<lbdarange[1])
+            # Data
+            data = np.nanmean(f["PRIMARY"].data.copy()[flagin], axis=0)
+            variance = np.nanmean(f["VARIANCE"].data.copy()[flagin], axis=0)
+            # spaxel mapping
+            spaxel_mapping = {i:k for i,k in zip(f["SPAX_ID"].data,f["MAPPING"].data)}
+            spaxel_vert    = f["SPAX_VERT"].data
+            spaxel_vert = f["SPAX_VERT"].data.copy()
+            # loading the cls
+            slice_ = cls(None)
+            slice_.create(data, variance=variance, lbda=np.mean(lbda[flagin]),
+                              spaxel_mapping=spaxel_mapping.copy())
+            slice_.set_spaxel_vertices(spaxel_vert.copy())
+            
+            # cleaning the tmp variables
+            del header, lbda, flagin
+            del data, variance
+            del spaxel_mapping, spaxel_vert
+    
+        return slice_
+
+    # ================= #
+    #  Main Method      #
+    # ================= #
+    # // get some spaxels
+    def get_brightest_spaxels(self, nspaxels=1):
+        """ """
+        return self.indexes[np.argsort(self.data)][::-1][:nspaxels]
+    
+    def get_faintest_spaxels(self, nspaxels=1):
+        """ """
+        return self.indexes[np.argsort(self.data)][:nspaxels]
+    
+    # //
+    def get_subslice(self, indexes):
+        """ """
+        slice_ = self.__class__(None)
+        spaxelsin = np.in1d(self.indexes, indexes)
+        slice_.create(self.data[spaxelsin],
+                      variance=self.variance[spaxelsin] if self.has_variance() else None,
+                     lbda=self.lbda,
+                     spaxel_mapping={k:v for k,v in self.spaxel_mapping.items() if k in indexes})
+        slice_.set_spaxel_vertices(self.spaxel_vertices)
+        return slice_
+        
+        
+    
     def show(self, toshow="data", ax = None, savefile=None, show=True,
                  vmin=None, vmax=None, show_colorbar=True, cmap=None,
                  clabel="",cfontsize="large", empty_if_nan=True,

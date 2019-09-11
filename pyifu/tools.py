@@ -181,8 +181,7 @@ def colorbar(ax,cmap,vmin=0,vmax=1,label="",
     if "ticks" in kwargs.keys() and "ticklabels" not in kwargs.keys():
         c_bar.ax.set_xticklabels([r"%s"%v for v in kwargs["ticks"]])
         
-    ax.set_xticks([]) if kwargs["orientation"] == "vertical" \
-      else ax.set_yticks([])
+    ax.set_xticks([]) if kwargs["orientation"] == "vertical" else ax.set_yticks([])
     return c_bar
 
 
