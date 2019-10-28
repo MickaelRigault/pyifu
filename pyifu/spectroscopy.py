@@ -279,7 +279,7 @@ class SpecSource( BaseObject ):
             
             self._derived_properties["data"]  = self.rawdata / coef if onraw else self.data / coef
             if self.has_variance():
-                self._derived_properties["variance"]  = self.rawvariance / coef**2 if onraw else self.variance / coef
+                self._derived_properties["variance"]  = self.rawvariance / coef**2 if onraw else self.variance / coef**2
         else:
             raise ValueError("scale_by is not able to parse the shape of coef.", np.shape(coef))
     # -------- #
@@ -1535,8 +1535,8 @@ class Slice( SpaxelHandler ):
     
         # - The Patchs
         for i in range(self.nspaxels):
-            c_ = "None" if value is None or (np.isnan(value[i]) and empty_if_nan) else colors[i] 
-            linewidth = 1 if c_ == "None" and lw==0 else lw           
+            c_ = ["None"] if value is None or (np.isnan(value[i]) and empty_if_nan) else colors[i]
+            linewidth = 1 if c_[0] == "None" and lw==0 else lw
             ax.add_patch(patches.Polygon(self.spaxel_vertices+np.asarray([x[i],y[i]]),
                                 facecolor=c_, alpha=alpha, linewidth=linewidth, edgecolor=ec,
                                   **kwargs))
