@@ -140,7 +140,7 @@ def synthesize_photometry(lbda, flux, filter_lbda, filter_trans,
     # ---------
     # The Code
     normband = 1. if not normed else \
-      integrate_photons(lbda,np.ones(len(lbda)),None,filter_lbda,filter_trans)
+      integrate_photons(lbda, np.ones(len(lbda)),None,filter_lbda,filter_trans)
       
     return integrate_photons(lbda,flux,None,filter_lbda,filter_trans)/normband
 
@@ -1551,7 +1551,8 @@ class Slice( SpaxelHandler ):
                     fontsize=cfontsize)
     
         fig.figout(savefile=savefile, show=show)
-        
+        return fig
+    
     def get_spaxel_polygon(self):
         """ return list of Shapely Polygon corresponding to the spaxel position on sky """
         try:
