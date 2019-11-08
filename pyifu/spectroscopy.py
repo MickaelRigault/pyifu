@@ -2005,7 +2005,7 @@ class Cube( SpaxelHandler ):
     # -------------- #
     # Manage 3D e3D  #
     # -------------- #
-    def get_index_data(self, index, data="data", spaxelindex=False):
+    def get_index_data(self, index, data="data", spaxelindexes=False):
         """ Return the `data` corresponding the the ith index 
 
         Parameters
@@ -2025,7 +2025,7 @@ class Cube( SpaxelHandler ):
              or - index=[12, 18, 23], spaxelindexes=True
 
         """
-        indexes = index if not spaxelindex else np.arange(self.nspaxels)[np.isin(self.indexes,index)]
+        indexes = index if not spaxelindexes else np.arange(self.nspaxels)[np.isin(self.indexes,index)]
         if self.is_3d_cube():
             if is_arraylike(indexes):
                 return [self.get_index_data(index_,data=data) for index_ in indexes]
