@@ -1172,7 +1172,11 @@ class SpaxelHandler( SpecSource ):
         return cube
 
 
-        
+    def contains(self, x, y):
+        """ Test if the x and y coordinates (in spaxels units) are withing the contour polygon """
+        from shapely import vectorized
+        return vectorized.contains(self.contour_polygon, x,y)
+    
     def get_spaxels_within_polygon(self, polygon, inclusive=True):
         """ Returns the spaxel within the given polygon. 
         (this uses fraction_of_spaxel_within_polygon, 
@@ -1381,6 +1385,11 @@ class SpaxelHandler( SpecSource ):
         return len(self.data.shape) == 3
 
     @property
+    def xy(self):
+        """ position of the center of each spaxel (in spaxel units)"""
+        return np.asarray(self.index_to_xy(self.indexes)).T
+    
+    @property
     def spaxel_mapping(self):
         """ dictionary containing the connection between spaxel index (int) and spaxel position (x,y)"""
         if self._properties["spaxel_mapping"] is None:
@@ -1432,7 +1441,18 @@ class SpaxelHandler( SpecSource ):
             self.set_spaxel_vertices([[0.5, 0.5],[-0.5,0.5],[-0.5, -0.5],[0.5,-0.5]])
         return self._properties["spaxel_vertices"]
 
-
+    @property
+    def contour_polygon(self):
+        """ """
+        from shapely import geometry
+        x,y = np.asarray(self.index_to_xy(self.indexes)).T
+        return geometry.MultiPolygon([geometry.Polygon(self.spaxel_vertices+np.asarray([x[i],y[i]])) for i in range(self.nspaxels)]
+                                     ).convex_hull
+    @property
+    def convexhull_vertices(self):
+        """ """
+        return np.asarray(self.contour_polygon.exterior.xy)
+    
 class Slice( SpaxelHandler ):
     """ """
     # ================= #
@@ -1459,7 +1479,7 @@ class Slice( SpaxelHandler ):
             slice_.create(data, variance=variance, lbda=np.mean(lbda[flagin]),
                               spaxel_mapping=spaxel_mapping.copy())
             slice_.set_spaxel_vertices(spaxel_vert.copy())
-            
+            slice_.set_header(header.copy())
             # cleaning the tmp variables
             del header, lbda, flagin
             del data, variance
@@ -1562,6 +1582,7 @@ class Slice( SpaxelHandler ):
         
         x,y = np.asarray(self.index_to_xy(self.indexes)).T
         return [Polygon(self.spaxel_vertices+np.asarray([x[i],y[i]])) for i in range(self.nspaxels)]
+
         
 class Cube( SpaxelHandler ):
     """
@@ -1725,7 +1746,7 @@ class Cube( SpaxelHandler ):
     #  SPAXEL   #
     # --------- #
     # - GET SPECTRUM
-    def get_spectrum(self, index, data="data", usemean=False):
+    def get_spectrum(self, index, data="data", usemean=False, spaxelindexes=False):
         """ Return a Spectrum object based on the given index
         If index is a list of indexes, the mean spectrum will be returned.
         (see xy_to_index to convert 2D coordinates into index)
@@ -1745,14 +1766,21 @@ class Cube( SpaxelHandler ):
             average will be used to combine spectra except if `usemean` is True. 
             In that case, the simple mean will be used.
         
+        spaxelindexes: [bool] -optional-
+            If True, this means you gave index as stored in self.indexes, and not as entries of self.indexes. 
+            i.e.: if self.indexes = [12,18,22,23;26,40...].and you want to use spaxels associated indexes [12, 18, 23]:
+            do:
+                - index=[0,1,3],      spaxelindexes=False
+             or - index=[12, 18, 23], spaxelindexes=True
+            
         Returns
         -------
         Spectrum
         """
         spec = Spectrum(None)
 
-        data_ = self.get_index_data(index,data)
-        variance = self.get_index_data(index,data="variance") if self.has_variance() and "data" in data else None
+        data_ = self.get_index_data(index, data, spaxelindexes=spaxelindexes)
+        variance = self.get_index_data(index, data="variance", spaxelindexes=spaxelindexes) if self.has_variance() and "data" in data else None
         
         if is_arraylike(index):
             # multiple indexes
@@ -1977,15 +2005,34 @@ class Cube( SpaxelHandler ):
     # -------------- #
     # Manage 3D e3D  #
     # -------------- #
-    def get_index_data(self, index, data="data"):
-        """ Return the `data` corresponding the the ith index """
+    def get_index_data(self, index, data="data", spaxelindex=False):
+        """ Return the `data` corresponding the the ith index 
+
+        Parameters
+        ----------
+        index: [int, list of]
+            index (or list of index) for which you want a spectrum.
+            If a list is given, the returned spectrum will be the average spectrum.
+
+        data: [string] -optional-
+            Which attribute of the cube will be considered as the 'data' of the cube?
+
+        spaxelindexes: [bool] -optional-
+            If True, this means you gave index as stored in self.indexes, and not as entries of self.indexes. 
+            i.e.: if self.indexes = [12,18,22,23;26,40...].and you want to use spaxels associated indexes [12, 18, 23]:
+            do:
+                - index=[0,1,3],      spaxelindexes=False
+             or - index=[12, 18, 23], spaxelindexes=True
+
+        """
+        indexes = index if not spaxelindex else np.arange(self.nspaxels)[np.isin(self.indexes,index)
         if self.is_3d_cube():
-            if is_arraylike(index):
-                return [self.get_index_data(index_,data=data) for index_ in index]
-            x,y = self.index_to_xy(index)
+            if is_arraylike(indexes):
+                return [self.get_index_data(index_,data=data) for index_ in indexes]
+            x,y = self.index_to_xy(indexes)
             return eval("self.%s.T[x,y]"%data)
 
-        return eval("self.%s.T[index]"%data)
+        return eval("self.%s.T[indexes]"%data)
         
     
     # -------------- #
