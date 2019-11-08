@@ -2025,7 +2025,7 @@ class Cube( SpaxelHandler ):
              or - index=[12, 18, 23], spaxelindexes=True
 
         """
-        indexes = index if not spaxelindex else np.arange(self.nspaxels)[np.isin(self.indexes,index)
+        indexes = index if not spaxelindex else np.arange(self.nspaxels)[np.isin(self.indexes,index)]
         if self.is_3d_cube():
             if is_arraylike(indexes):
                 return [self.get_index_data(index_,data=data) for index_ in indexes]
