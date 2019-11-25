@@ -188,7 +188,7 @@ def colorbar(ax,cmap,vmin=0,vmax=1,label="",
 @make_method(mpl.Axes)
 def specplot(ax,x,y,var=None,
              color=None, bandprop={},
-             err_onzero=False,**kwargs):
+             err_onzero=False, yscalefill=False, **kwargs):
     """This function in a build-in axes method that enable to quickly and
     easily plot a spectrum.
     """
@@ -211,7 +211,8 @@ def specplot(ax,x,y,var=None,
         default_band   = dict(
             color=propplot["color"], alpha=kwargs.pop("alpha",1.)/3.,
             zorder=3)
-        
+
+        ylim = ax.get_ylim()
         bandprop = kwargs_update(default_band,**bandprop)
         bandprop["label"] = "_no_legend_"
         # -- Band
@@ -221,6 +222,9 @@ def specplot(ax,x,y,var=None,
         else:
             fill = ax.fill_between(x,np.sqrt(var),-np.sqrt(var),
                             **bandprop)
+        if not yscalefill:
+            ax.set_ylim(*ylim)
+            
     else:
         fill = None
         

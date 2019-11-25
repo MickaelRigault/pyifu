@@ -86,7 +86,8 @@ def get_spectrum(lbda, flux, variance=None, header=None, logwave=None):
     return spec
 
 def get_slice(data, xy, spaxel_vertices=None,
-                variance=None, indexes=None, lbda=None):
+                variance=None, indexes=None, lbda=None,
+                header=None):
     """ 
     Parameters
     ----------
@@ -103,7 +104,8 @@ def get_slice(data, xy, spaxel_vertices=None,
     slice_.create(data, variance=variance, lbda=lbda,spaxel_mapping=spaxel_mapping)
     if spaxel_vertices is not None:
         slice_.set_spaxel_vertices(spaxel_vertices)
-        
+    if header is not None:
+        slice_.set_header(header)
     return slice_
 
 def synthesize_photometry(lbda, flux, filter_lbda, filter_trans,
@@ -1172,10 +1174,11 @@ class SpaxelHandler( SpecSource ):
         return cube
 
 
-    def contains(self, x, y):
+    def contains(self, x, y, buffer=None):
         """ Test if the x and y coordinates (in spaxels units) are withing the contour polygon """
         from shapely import vectorized
-        return vectorized.contains(self.contour_polygon, x,y)
+        poly = self.contour_polygon if buffer is None else self.contour_polygon.buffer(buffer)
+        return vectorized.contains(poly, x,y)
     
     def get_spaxels_within_polygon(self, polygon, inclusive=True):
         """ Returns the spaxel within the given polygon. 
@@ -1225,7 +1228,7 @@ class SpaxelHandler( SpecSource ):
             raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
         
         
-        polyvert  = np.asarray([verts for verts in np.asarray([self.spaxel_vertices+np.asarray(self.index_to_xy(id_)) for id_ in self.indexes])])
+        polyvert  = self.spaxels_vertices # np.asarray([verts for verts in np.asarray([self.spaxel_vertices+np.asarray(self.index_to_xy(id_)) for id_ in self.indexes])])
         # xs and ys are the x and y coordinates of all the vertices
         xs, yx    = polyvert.T
         spaxel_edges_in = contains(polygon, xs,yx)
@@ -1349,6 +1352,51 @@ class SpaxelHandler( SpecSource ):
             return [i for i,v in self.spaxel_mapping.items() if v == xy]
         return [i for i,v in self.spaxel_mapping.items() if np.any(v in xy)]
 
+    def is_spaxels_nan(self):
+        """ """
+        return np.asarray(np.sum(np.isnan(self.spaxels_vertices), axis=(1,2)), dtype="bool")
+    
+    def get_spaxel_polygon(self, remove_nan=False, format="polygons"):
+        """ return list of Shapely Polygon corresponding to the spaxel position on sky 
+        
+        format: [string] -optional-
+            output format:
+            - polygons: list of polygons
+            - multipylygon: MultiPolygon
+            - list: list of vertices
+            - array: array of vertices
+            - dict: dictionary {index:vertex}
+            - dataframe: pandas.DataFrame(vectex, name: index)
+
+        """
+        
+        x,y = self.xy
+        all_poly = self.spaxels_vertices
+        if remove_nan:
+            flagout = self.is_spaxels_nan()
+            all_poly = all_poly[~flagout]
+            
+        if "polygon" in format:
+            try:
+                from shapely import geometry
+            except ImportError:
+                raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
+            if format.lower() == "polygons":
+                return [geometry.Polygon(p) for p in all_poly]
+            elif format.lower() in ["multipolygon", "multipolygons"]:
+                return geometry.MultiPolygon([geometry.Polygon(p) for p in all_poly])
+            raise ValueError("Cannot parse the given format (%s)"%format)
+        
+        if format in ["list"]:
+            return all_poly
+        if format in ["array"]:
+            return np.asarray(all_poly)
+        if format in ["dict"]:
+            indexes = self.indexes if not remove_nan else self.indexes[~flagout]
+            return {indexes[i]:p for i,p in enumerate(all_poly)}
+                        
+        raise ValueError("Cannot parse the given format (%s)"%format)
+
     def display_contours(self, ax=None, buffer=0.001, facecolor="None", edgecolor="0.7",
                              zorder=None, autoscale=True, **kwargs):
         """ """
@@ -1442,12 +1490,15 @@ class SpaxelHandler( SpecSource ):
         return self._properties["spaxel_vertices"]
 
     @property
+    def spaxels_vertices(self):
+        """ """
+        return self.xy.T[:,None] + self.spaxel_vertices
+    @property
     def contour_polygon(self):
         """ """
         from shapely import geometry
-        x,y = np.asarray(self.index_to_xy(self.indexes)).T
-        return geometry.MultiPolygon([geometry.Polygon(self.spaxel_vertices+np.asarray([x[i],y[i]])) for i in range(self.nspaxels)]
-                                     ).convex_hull
+        return geometry.MultiPolygon( self.get_spaxel_polygon(remove_nan=True) ).convex_hull
+    
     @property
     def convexhull_vertices(self):
         """ """
@@ -1551,7 +1602,7 @@ class Slice( SpaxelHandler ):
             colors = cmap((value-vmin)/(vmax-vmin))
             
                 
-        x,y = np.asarray(self.index_to_xy(self.indexes)).T
+        x,y = self.xy
     
         # - The Patchs
         for i in range(self.nspaxels):
@@ -1572,16 +1623,6 @@ class Slice( SpaxelHandler ):
     
         fig.figout(savefile=savefile, show=show)
         return fig
-    
-    def get_spaxel_polygon(self):
-        """ return list of Shapely Polygon corresponding to the spaxel position on sky """
-        try:
-            from shapely.geometry import Polygon
-        except ImportError:
-            raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
-        
-        x,y = np.asarray(self.index_to_xy(self.indexes)).T
-        return [Polygon(self.spaxel_vertices+np.asarray([x[i],y[i]])) for i in range(self.nspaxels)]
 
         
 class Cube( SpaxelHandler ):
