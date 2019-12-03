@@ -222,7 +222,7 @@ def specplot(ax,x,y,var=None,
         else:
             fill = ax.fill_between(x,np.sqrt(var),-np.sqrt(var),
                             **bandprop)
-        if not yscalefill:
+        if yscalefill:
             ax.set_ylim(*ylim)
             
     else:
