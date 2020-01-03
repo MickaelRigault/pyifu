@@ -242,7 +242,7 @@ class SpecSource( BaseObject ):
             
             self._derived_properties["data"]  = self.rawdata / coef if onraw else self.data / coef
             if self.has_variance():
-                self._derived_properties["variance"]  = self.rawvariance / coef**2 if onraw else self.variance / coef
+                self._derived_properties["variance"]  = self.rawvariance / coef**2 if onraw else self.variance / coef**2
         else:
             raise ValueError("scale_by is not able to parse the shape of coef.", np.shape(coef))
     # -------- #
