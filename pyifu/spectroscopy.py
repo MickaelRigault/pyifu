@@ -1207,6 +1207,12 @@ class SpaxelHandler( SpecSource ):
         if inclusive:
             return np.asarray(self.indexes[np.asarray(w, dtype="bool")]).tolist()
         return np.asarray(self.indexes[np.asarray(np.asarray(w, dtype="int"), dtype="bool")]).tolist()
+
+    def get_spaxels_contours(self, indexes):
+        """ """
+        from shapely import geometry, ops
+        mpoly = geometry.MultiPolygon([geometry.Polygon(self.spaxels_vertices[k]).buffer(0.1) for k in indexes])
+        return ops.cascaded_union(mpoly)
  
     def fraction_of_spaxel_within_polygon(self, polygon):
         """ get the fraction of spaxel overlapping with the given polygon
