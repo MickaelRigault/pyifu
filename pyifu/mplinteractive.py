@@ -509,7 +509,7 @@ class InteractiveCube( BaseObject ):
         """ """
         edge = 0.1
         if len(self.axspec.get_lines())>0:
-            ymin, ymax = np.percentile(np.concatenate([l.get_data()[-1] for l in self.axspec.get_lines()]), [0,100])
+            ymin, ymax = np.percentile(np.concatenate([l.get_data()[-1][l.get_data()[-1]==l.get_data()[-1]] for l in self.axspec.get_lines()]), [0,100])
             ymin =ymin*(1.+edge) if ymin<0 else ymin*(1-edge)
             ymax =ymax*(1.+edge) if ymax>0 else ymax*(1-edge)
             
