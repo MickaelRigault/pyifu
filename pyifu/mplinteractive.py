@@ -53,6 +53,12 @@ DOCUMENTATION = \
    """
 
 
+def toolbar_active(toolbar):
+    if toolbar is None or (hasattr(toolbar,"_active") and toolbar._active is None):
+        return False
+    
+    return True
+
 
 WAVESPAN_PROP = dict(edgecolor=mpl.cm.binary(0.7,0.7), facecolor=mpl.cm.binary(0.7,0.2))
 
@@ -313,7 +319,7 @@ class InteractiveCube( BaseObject ):
     # - Click 
     def interact_onclick(self, event):
         """ """
-        if self.fig.canvas.manager.toolbar._active is not None:
+        if not toolbar_active(self.fig.canvas.manager.toolbar):
             return
         
         if event.inaxes == self.axim:
@@ -323,7 +329,7 @@ class InteractiveCube( BaseObject ):
 
     def interact_onrelease(self, event):
         """ What would happen when you release the mouse click """
-        if self.fig.canvas.manager.toolbar._active is not None:
+        if not toolbar_active(self.fig.canvas.manager.toolbar):
             return
         
         if event.inaxes == self.axim:
@@ -332,7 +338,7 @@ class InteractiveCube( BaseObject ):
             self._onrelease_axspec_(event)
 
     def interact_trackmotion(self, event):
-        if self.fig.canvas.manager.toolbar._active is not None:
+        if not toolbar_active(self.fig.canvas.manager.toolbar):
             return
         
         if event.inaxes == self.axim:
