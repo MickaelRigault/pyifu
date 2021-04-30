@@ -420,7 +420,11 @@ class SpecSource( BaseObject ):
         """
         self._side_properties["header"] = header
         self._header_to_spec_prop_()
-            
+
+    def set_filename(self, filename):
+        """ """
+        self._side_properties["filename"] = filename
+        
     # =================== #
     #   Properties        #
     # =================== #
