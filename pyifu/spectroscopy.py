@@ -1645,6 +1645,19 @@ class Cube( SpaxelHandler ):
     # ================ #
     #  Main Method     #
     # ================ #
+    @classmethod
+    def from_data(cls, data, variance=None, header=None, lbda=None,
+                      spaxel_mapping=None, spaxel_vertices=None)
+        """ """
+        this = cls(None)
+        this.create(data, header=header, variance=variance,
+                    lbda=lbda, spaxel_mapping=spaxel_mapping)
+        if spaxel_vertices is not None:
+            this.set_spaxel_vertices(spaxel_vertices)
+        
+        return this
+
+    
     # -------- #
     # Oper.    #
     # -------- #
