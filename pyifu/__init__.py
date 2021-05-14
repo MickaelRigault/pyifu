@@ -1,6 +1,6 @@
 """  Python library to manipulate Integral Field Unit (IFU) cubes """
 
-__version__ = "0.10.7"
+__version__ = "0.11.0"
 
 from .spectroscopy import *
 

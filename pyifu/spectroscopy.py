@@ -364,7 +364,13 @@ class SpecSource( BaseObject ):
         # - Wavelength
         if lbda is not None:
             self.set_lbda(lbda, logwave=logwave)
-
+        else:
+            try:
+                self.load_lbda_fromheader()
+            except:
+                warnings.warn("No lbda given and cannot load it from the header")
+        
+            
     def set_lbda(self, lbda, logwave=None):
         """ Set the wavelength associated with the data.
         
@@ -409,7 +415,7 @@ class SpecSource( BaseObject ):
         if len(np.unique(np.round(lbda[1:]-lbda[:-1], decimals=4)))==1:
             # slower and a bit convoluted but ensure class' consistency
             self._lbda_to_header_(lbda, logwave)
-            self._properties["lbda"] = self._lbda_from_header_()
+            self.load_lbda_fromheader()
         else:
             self._properties["lbda"] = np.asarray(lbda)
 
@@ -435,9 +441,13 @@ class SpecSource( BaseObject ):
     def lbda(self):
         """ """
         if self._properties["lbda"] is None:
-            self._properties["lbda"] = self._lbda_from_header_()
+            self.load_lbda_fromheader()
         return self._properties["lbda"]
-    
+
+    def load_lbda_fromheader(self):
+        """ """
+        self._properties["lbda"] = self._lbda_from_header_()
+        
     @property
     def rawdata(self):
         """ """
@@ -834,6 +844,40 @@ class SpaxelHandler( SpecSource ):
     """ """
     PROPERTIES = ["spaxel_mapping","spaxel_vertices"]
 
+    @classmethod
+    def from_data(cls, data, variance=None, header=None, lbda=None,
+                      spaxel_mapping=None, spaxel_vertices=None):
+        """ """
+        this = cls(None)
+        this.create(data, header=header, variance=variance,
+                    lbda=lbda, spaxel_mapping=spaxel_mapping)
+        if spaxel_vertices is not None:
+            this.set_spaxel_vertices(spaxel_vertices)
+        
+        return this
+
+    def get_new(self, newdata=None, newvariance=None,
+                    newheader=None, newlbda=None,
+                    newspaxel_mapping=None, newspaxel_vertices=None
+                    ):
+        if newdata is None:
+            newdata = self.data
+        if newvariance is None:
+            newvariance = self.variance
+        if newheader is None:
+            newheader = self.header
+        if newlbda is None:
+            newlbda = self.lbda
+
+        if newspaxel_mapping is None:
+            newspaxel_mapping = self.spaxel_mapping
+            
+        if newspaxel_vertices is None:
+            newspaxel_vertices = self.spaxel_vertices
+
+        return self.__class__.from_data(data=newdata, variance=newvariance,
+                                        header=newheader, lbda=newlbda,
+                                        spaxel_mapping=newspaxel_mapping, spaxel_vertices=newspaxel_vertices)
     # ================ #
     #  Main Method     #
     # ================ #
@@ -876,7 +920,8 @@ class SpaxelHandler( SpecSource ):
         self.set_data(data, variance, lbda,
                       spaxel_mapping=spaxel_mapping)
 
-    def set_data(self, data, variance=None, lbda=None, spaxel_mapping=None):
+    def set_data(self, data, variance=None, lbda=None, spaxel_mapping=None,
+                     logwave=None):
         """ Set the spectral data 
 
         Parameters
@@ -903,7 +948,7 @@ class SpaxelHandler( SpecSource ):
         -------
         Void
         """
-        if spaxel_mapping is None and hasattr(self, "spaxel_mapping"):
+        if spaxel_mapping is None and hasattr(self, "spaxel_mapping") and self.spaxel_mapping is not None and len(self.spaxel_mapping)>0:
             if len(data) != self.nspaxels or (variance is not None and len(variance) != self.nspaxels):
                 raise ValueError("size of data and/or variance (if any) does not match that of existing spaxel_mapping")
             
@@ -921,7 +966,12 @@ class SpaxelHandler( SpecSource ):
         
         # - Wavelength
         if lbda is not None:
-            self.set_lbda(lbda)
+            self.set_lbda(lbda, logwave=logwave)
+        else:
+            try:
+                self.load_lbda_fromheader()
+            except:
+                warnings.warn("No lbda given and cannot load it from the header")
 
     def set_spaxel_mapping(self, spaxel_mapping):
         """ Provide how the data are organised in the 2D grid. 
@@ -978,7 +1028,26 @@ class SpaxelHandler( SpecSource ):
     # -------- #
     #   I/O    #
     # -------- #
-    def writeto(self,savefile, force=True, saveerror=False):
+    def writeto(self, savefile, format="None", **kwargs):
+        """ """
+        if format is None:
+            format = savefile.split(".")[-1]
+
+        if format == "fits":
+            self.to_fits(savefile, **kwargs)
+        elif format in ["hdf","hdf5","h5"]:
+            self.to_h5(savefile, **kwargs)
+        else:
+            raise NotImplementedError(f"only fits and hdf5 format implemented, {format} given")
+
+    def to_hdf(self, savefile, keys={}):
+        """ """
+        pandas_dict = self.to_pandas()
+        for key, d in pandas_dict.items():
+            if d is not None:
+                d.to_hdf(savefile, key=key)
+
+    def to_fits(self, savefile, force=True, saveerror=False, headerbased=True):
         """ Save the cube the given `savefile`
 
         Parameters
@@ -1010,27 +1079,31 @@ class SpaxelHandler( SpecSource ):
             hduVar  = ImageHDU(np.sqrt(self.variance), name='ERROR') if saveerror else\
                       ImageHDU(self.variance, name='VARIANCE') 
             hdul.append(hduVar)
+
         
         naxis = 3 if self.is_3d_cube() else len(np.shape(self.data))
-        hduP.header.set('NAXIS',naxis)
-        if "lstep" in self.spec_prop.keys():
-            hduP.header.set('%s%d'%(self._build_properties["lengthkey"],naxis), self.spec_prop["lspix"])   
-            hduP.header.set('%s%d'%(self._build_properties["stepkey"],naxis),   self.spec_prop["lstep"])
-            hduP.header.set('%s%d'%(self._build_properties["startkey"],naxis),  self.spec_prop["lstart"])
-        elif self.lbda is not None:
-            hdul.append(ImageHDU(self.lbda, name='LBDA'))
+        
+        if headerbased:
+            if "lstep" in self.spec_prop.keys():
+                hduP.header.set('NAXIS',naxis)
+                hduP.header.set('%s%d'%(self._build_properties["lengthkey"],naxis), self.spec_prop["lspix"])   
+                hduP.header.set('%s%d'%(self._build_properties["stepkey"],naxis),   self.spec_prop["lstep"])
+                hduP.header.set('%s%d'%(self._build_properties["startkey"],naxis),  self.spec_prop["lstart"])
+            elif self.lbda is not None:
+                hdul.append(ImageHDU(self.lbda, name='LBDA'))
     
-        if self.is_3d_cube():
-            hduP.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop["wspix"])
-            hduP.header.set('%s2'%self._build_properties["lengthkey"],self.spec_prop["nspix"])  
-            hduP.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop["wstep"])
-            hduP.header.set('%s2'%self._build_properties["stepkey"],self.spec_prop["nstep"])
-            hduP.header.set('%s1'%self._build_properties["startkey"],self.spec_prop["wstart"])
-            hduP.header.set('%s2'%self._build_properties["startkey"],self.spec_prop["nstart"])
-        elif naxis==2:
-            hduP.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop.get("wspix", len(self.rawdata.T)))
-            hduP.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop.get("wstep", 1))
-            hduP.header.set('%s1'%self._build_properties["startkey"],self.spec_prop.get("wstart",0))
+            if self.is_3d_cube():
+                hduP.header.set('NAXIS',naxis)
+                hduP.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop["wspix"])
+                hduP.header.set('%s2'%self._build_properties["lengthkey"],self.spec_prop["nspix"])  
+                hduP.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop["wstep"])
+                hduP.header.set('%s2'%self._build_properties["stepkey"],self.spec_prop["nstep"])
+                hduP.header.set('%s1'%self._build_properties["startkey"],self.spec_prop["wstart"])
+                hduP.header.set('%s2'%self._build_properties["startkey"],self.spec_prop["nstart"])
+            elif naxis==2 and lbdainheader:
+                hduP.header.set('%s1'%self._build_properties["lengthkey"],self.spec_prop.get("wspix", len(self.rawdata.T)))
+                hduP.header.set('%s1'%self._build_properties["stepkey"],self.spec_prop.get("wstep", 1))
+                hduP.header.set('%s1'%self._build_properties["startkey"],self.spec_prop.get("wstart",0))
             
         if naxis<3:
             hdul.append(ImageHDU([v for i,v in self.spaxel_mapping.items()], name='MAPPING'))
@@ -1042,9 +1115,49 @@ class SpaxelHandler( SpecSource ):
             
         hdulist = HDUList(hdul)
         hdulist.writeto(savefile,overwrite=force)
-        
 
-    def load(self, filename, dataindex=0, headerindex=None):
+    @classmethod
+    def read(cls, filename, format=None, **kwargs):
+        """ """
+        if format is None:
+            format = filename.split(".")[-1]
+
+        if format == "fits":
+            return cls.read_fits(filename)
+        
+        if format in ["h5","hdf","hdf5"]:
+            return cls.read_hdf(filename)
+        
+        raise NotImplementedError(f"Only fits and hdf5 format implemented, {format} given")
+
+    @classmethod
+    def read_fits(cls, filename, dataindex=0, headerindex=None, **kwargs):
+        """ """
+        this  = cls(None)
+        this.load(filename, format="fits", dataindex=dataindex, headerindex=headerindex, **kwargs)
+        return this
+
+    @classmethod
+    def read_hdf(cls, filename, **kwargs):
+        """ """
+        this  = cls(None)
+        this.load(filename, format="hdf", **kwargs)
+        return this
+
+    def load(self, filename, format=None, **kwargs):
+        """ """
+        if format is None:
+            format = filename.split(".")[-1]
+
+        if format == "fits":
+            self.load_fits(filename)
+        
+        elif format in ["h5","hdf","hdf5"]:
+            self.load_hdf(filename)
+        else:
+            raise NotImplementedError(f"Only fits and hdf5 format implemented, {format} given")
+                      
+    def load_fits(self, filename, dataindex=0, headerindex=None):
         """  load the data cube. 
         Several format have been predifed. 
         
@@ -1117,6 +1230,33 @@ class SpaxelHandler( SpecSource ):
         self.create(data=data, header=self.fits[headerindex].header,
                     variance=variance, lbda=lbda, spaxel_mapping=spaxel_mapping)
 
+
+    def load_hdf(self, filename):
+        """ """
+        import pandas
+        from astropy.io import fits
+        # Data
+        data_ = pandas.read_hdf(filename, "data")
+        indexes = np.asarray(data_.index)
+        data = data_.values.T
+        # Variance
+        try:
+            variance = pandas.read_hdf(filename, "variance").values.T
+        except:
+            variance = None
+            
+        # lbda
+        lbda = pandas.read_hdf(filename, "lbda").values
+        header = fits.Header( dict(pandas.read_hdf(filename, "header")) )
+        spaxel_mapping_ = pandas.read_hdf(filename, "spaxel_mapping").values
+        spaxel_mapping  = {k:v for k,v in zip(indexes, spaxel_mapping_)}
+        spaxel_vertices = pandas.read_hdf(filename, "spaxel_vertices").values
+
+        self.set_spaxel_vertices(spaxel_vertices)
+        self.create(data=data, header=header,
+                    variance=variance, lbda=lbda, spaxel_mapping=spaxel_mapping)
+        
+        
     # Old e3d format
     @staticmethod
     def load_from_e3d(e3dfile):
@@ -1183,6 +1323,22 @@ class SpaxelHandler( SpecSource ):
         from shapely import vectorized
         poly = self.contour_polygon if buffer is None else self.contour_polygon.buffer(buffer)
         return vectorized.contains(poly, x,y)
+
+    def to_pandas(self):
+        """ """
+        import pandas
+        data = pandas.DataFrame(self.data.T, index=self.indexes)
+        if self.has_variance()
+            var  = pandas.DataFrame(self.variance.T, index=self.indexes)
+        else:
+            var = None
+        lbda  = pandas.Series(self.lbda)
+        mapping = pandas.DataFrame( self.spaxel_mapping, index=["x","y"]).T
+        verts = pandas.DataFrame(self.spaxel_vertices, columns=["x","y"])
+        header = pandas.Series( self.header)
+        return {"data":data, "variance":var, "lbda":lbda, 
+                "spaxel_mapping":mapping, "spaxel_vertices":verts, "header":header}
+        
     
     def get_spaxels_within_polygon(self, polygon, inclusive=True):
         """ Returns the spaxel within the given polygon. 
@@ -1316,7 +1472,6 @@ class SpaxelHandler( SpecSource ):
         # Return if needed
         if not inplace:
             return sp_
-
 
     def get_index_vertices(self, index):
         """ """
@@ -1519,6 +1674,7 @@ class Slice( SpaxelHandler ):
     # ================= #
     #  I/O              #
     # ================= #
+    
     @classmethod
     def from_cubefile(cls, filename, lbdarange=[6000,8000]):
         """ """
@@ -1645,18 +1801,6 @@ class Cube( SpaxelHandler ):
     # ================ #
     #  Main Method     #
     # ================ #
-    @classmethod
-    def from_data(cls, data, variance=None, header=None, lbda=None,
-                      spaxel_mapping=None, spaxel_vertices=None)
-        """ """
-        this = cls(None)
-        this.create(data, header=header, variance=variance,
-                    lbda=lbda, spaxel_mapping=spaxel_mapping)
-        if spaxel_vertices is not None:
-            this.set_spaxel_vertices(spaxel_vertices)
-        
-        return this
-
     
     # -------- #
     # Oper.    #
@@ -1900,6 +2044,39 @@ class Cube( SpaxelHandler ):
             copy_cube._derived_properties["data"] = self._derived_properties["data"][slice_id].T[spaxelsin].T
         
         return copy_cube
+
+
+    def get_sourcecube(self, sourcedf, sourcescale=5, slice_id=None):
+        """ extract a partial cube containing the spaxels within the source provided in the sourcedf
+
+        sourcedf: [pandas.DataFrame]
+            this dataframe must contain the sep/sextractor ellipse information:
+            x,y for the centroid
+            a,b for the second moment (major and minor axis)
+            theta for the angle (in degree)
+            = must be in units of spaxels =
+            
+        sourcescale: [float] -optional-
+            this multiply a and b. 1 means second moment (1 sigma)
+            
+        slide_id: [None or list] -optinal-
+            select the wavelength for the new returned cube.
+
+        Returns
+        -------
+        Cube
+        """
+        from matplotlib.patches import Ellipse
+        from shapely import geometry 
+        e = [Ellipse((d.x,d.y), d.a*sourcescale*2, d.b*sourcescale*2, d.theta*180/np.pi)
+             for d in sourcedf.itertuples()]
+        polys = [geometry.Polygon(e_.get_verts()) for e_ in e]
+        spaxels = np.unique(np.concatenate([self.get_spaxels_within_polygon(poly_) for poly_ in polys]))
+
+        if slice_id is None:
+            slice_id  = np.arange( len(self.lbda) )
+
+        return self.get_partial_cube(spaxels,  slice_id)
     
     # - SORTING TOOLS
     def get_sorted_spectra(self, lbda_range=None, data="data",
