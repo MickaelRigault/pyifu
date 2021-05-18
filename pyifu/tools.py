@@ -3,6 +3,7 @@
 
 """ Internal small toolbox"""
 
+import warnings
 import numpy as np
 import matplotlib.pyplot as mpl
 from matplotlib.transforms  import Bbox
@@ -41,7 +42,103 @@ def ipython_info():
     return 'notebook' if 'ipykernel' in sys.modules \
       else "terminal" if 'Ipython' in sys.modules \
     else None
-    
+
+# ================== #
+#  numpy             #
+# ================== #
+def nantrapz(y, x=None, dx=1.0, axis=-1):
+    """
+    Integrate along the given axis using the composite trapezoidal rule.
+
+    Integrate `y` (`x`) along given axis.
+
+    = Taken from numpy = 
+
+    Parameters
+    ----------
+    y : array_like
+        Input array to integrate.
+    x : array_like, optional
+        The sample points corresponding to the `y` values. If `x` is None,
+        the sample points are assumed to be evenly spaced `dx` apart. The
+        default is None.
+    dx : scalar, optional
+        The spacing between sample points when `x` is None. The default is 1.
+    axis : int, optional
+        The axis along which to integrate.
+
+    Returns
+    -------
+    trapz : float
+        Definite integral as approximated by trapezoidal rule.
+
+    See Also
+    --------
+    trapz, sum, cumsum
+
+    Notes
+    -----
+    Image [2]_ illustrates trapezoidal rule -- y-axis locations of points
+    will be taken from `y` array, by default x-axis distances between
+    points will be 1.0, alternatively they can be provided with `x` array
+    or with `dx` scalar.  Return value will be equal to combined area under
+    the red lines.
+
+
+    References
+    ----------
+    .. [1] Wikipedia page: https://en.wikipedia.org/wiki/Trapezoidal_rule
+
+    .. [2] Illustration image:
+           https://en.wikipedia.org/wiki/File:Composite_trapezoidal_rule_illustration.png
+
+    Examples
+    --------
+    >>> np.trapz([1,2,3])
+    4.0
+    >>> np.trapz([1,2,3], x=[4,6,8])
+    8.0
+    >>> np.trapz([1,2,3], dx=2)
+    8.0
+    >>> a = np.arange(6).reshape(2, 3)
+    >>> a
+    array([[0, 1, 2],
+           [3, 4, 5]])
+    >>> np.trapz(a, axis=0)
+    array([1.5, 2.5, 3.5])
+    >>> np.trapz(a, axis=1)
+    array([2.,  8.])
+
+    """
+    y = np.asanyarray(y)
+    if x is None:
+        d = dx
+    else:
+        x = np.asanyarray(x)
+        if x.ndim == 1:
+            d = np.diff(x)
+            # reshape to correct shape
+            shape = [1]*y.ndim
+            shape[axis] = d.shape[0]
+            d = d.reshape(shape)
+        else:
+            d = np.diff(x, axis=axis)
+    nd = y.ndim
+    slice1 = [slice(None)]*nd
+    slice2 = [slice(None)]*nd
+    slice1[axis] = slice(1, None)
+    slice2[axis] = slice(None, -1)
+    try:
+        ret = np.nansum(d * (y[tuple(slice1)] + y[tuple(slice2)]) / 2.0, axis=axis)
+    except ValueError:
+        if np.isnan(d).any:
+            warnings.warn("nantrapz not implemented for exception and NaN in you input d")
+        # Operations didn't work, cast to ndarray
+        d = np.asarray(d)
+        y = np.asarray(y)
+        ret = np.add.reduce(d * (y[tuple(slice1)]+y[tuple(slice2)])/2.0, axis)
+        
+    return ret
 # ================== #
 #   MPL Add On       #
 # ================== #

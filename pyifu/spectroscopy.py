@@ -108,6 +108,20 @@ def get_slice(data, xy, spaxel_vertices=None,
         slice_.set_header(header)
     return slice_
 
+
+def synthesize_photometry3d(lbda, flux, filter_lbda, filter_trans):
+    """ """
+    from .tools import nantrapz
+    filter_interp = np.interp(lbda, filter_lbda, filter_trans)
+    
+    dphotons = (filter_interp[:,None] * flux) * lbda[:,None] * 5.006909561e7
+    refnorm  = flux/flux # nan stay nan, rest is 1
+    norm_    = (filter_interp[:,None] *  refnorm)* lbda[:,None] * 5.006909561e7
+    
+    return nantrapz(dphotons.T,lbda)/nantrapz(norm_.T, lbda)
+
+                
+
 def synthesize_photometry(lbda, flux, filter_lbda, filter_trans,
                           normed=True):
     """ Get Photometry from the given spectral information through the given filter.
@@ -133,11 +147,12 @@ def synthesize_photometry(lbda, flux, filter_lbda, filter_trans,
     """
     # ---------
     # The Tool
+    from .tools import nantrapz
     def integrate_photons(lbda, flux, step, flbda, fthroughput):
         """ """
         filter_interp = np.interp(lbda, flbda, fthroughput)
         dphotons = (filter_interp * flux) * lbda * 5.006909561e7
-        return np.trapz(dphotons,lbda) if step is None else np.sum(dphotons*step)
+        return nantrapz(dphotons,lbda) if step is None else np.sum(dphotons*step)
     
     # ---------
     # The Code
@@ -371,7 +386,7 @@ class SpecSource( BaseObject ):
                 warnings.warn("No lbda given and cannot load it from the header")
         
             
-    def set_lbda(self, lbda, logwave=None):
+    def set_lbda(self, lbda, logwave=None, setheader=False):
         """ Set the wavelength associated with the data.
         
         Parameters
@@ -412,7 +427,7 @@ class SpecSource( BaseObject ):
             return
         
         # - unique step array?
-        if len(np.unique(np.round(lbda[1:]-lbda[:-1], decimals=4)))==1:
+        if len(np.unique(np.round(lbda[1:]-lbda[:-1], decimals=4)))==1 and setheader:
             # slower and a bit convoluted but ensure class' consistency
             self._lbda_to_header_(lbda, logwave)
             self.load_lbda_fromheader()
@@ -883,7 +898,7 @@ class SpaxelHandler( SpecSource ):
     # ================ #
     def create(self, data ,header=None,
                     variance=None,
-                    lbda=None, spaxel_mapping=None):
+                    lbda=None, spaxel_mapping=None, **kwargs):
         """  High level setting method.
 
         Parameters
@@ -918,10 +933,10 @@ class SpaxelHandler( SpecSource ):
         """
         self.set_header(header)
         self.set_data(data, variance, lbda,
-                      spaxel_mapping=spaxel_mapping)
+                      spaxel_mapping=spaxel_mapping, **kwargs)
 
     def set_data(self, data, variance=None, lbda=None, spaxel_mapping=None,
-                     logwave=None):
+                     logwave=None, lbdatoheader=False):
         """ Set the spectral data 
 
         Parameters
@@ -966,7 +981,7 @@ class SpaxelHandler( SpecSource ):
         
         # - Wavelength
         if lbda is not None:
-            self.set_lbda(lbda, logwave=logwave)
+            self.set_lbda(lbda, logwave=logwave, setheader=lbdatoheader)
         else:
             try:
                 self.load_lbda_fromheader()
@@ -1036,7 +1051,7 @@ class SpaxelHandler( SpecSource ):
         if format == "fits":
             self.to_fits(savefile, **kwargs)
         elif format in ["hdf","hdf5","h5"]:
-            self.to_h5(savefile, **kwargs)
+            self.to_hdf(savefile, **kwargs)
         else:
             raise NotImplementedError(f"only fits and hdf5 format implemented, {format} given")
 
@@ -1328,7 +1343,7 @@ class SpaxelHandler( SpecSource ):
         """ """
         import pandas
         data = pandas.DataFrame(self.data.T, index=self.indexes)
-        if self.has_variance()
+        if self.has_variance():
             var  = pandas.DataFrame(self.variance.T, index=self.indexes)
         else:
             var = None
@@ -1909,12 +1924,8 @@ class Cube( SpaxelHandler ):
                 lbda_f, trans_f = lbda_trans
             except:
                 raise ValueError("lbda_trans must be a 2D array if not None; lbda_f, trans_f = lbda_trans")
-            slice_data = [synthesize_photometry(self.lbda, self.get_index_data(i),
-                                                                 lbda_f, trans_f)
-                              for i in range(self.nspaxels)]
-            slice_var  = [synthesize_photometry(self.lbda, self.get_index_data(i, "variance"),
-                                                                 lbda_f, trans_f)
-                              for i in range(self.nspaxels)]
+            slice_data = synthesize_photometry3d(self.lbda, self.data, lbda_f, trans_f)
+            slice_var  = synthesize_photometry3d(self.lbda, self.variance, lbda_f, trans_f)
             lbda = np.average(lbda_f, weights=trans_f)
     
         elif index is not None:

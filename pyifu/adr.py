@@ -44,7 +44,6 @@ class ADR( BaseObject ):
     """ """
     PROPERTIES = ["airmass",  "lbdaref","parangle", "pressure",
                  "relathumidity" , "temperature"]
-    DERIVED_PROPERTIES = []
 
     def __init__(self, **kwargs):
         """  **kwargs: 
@@ -281,7 +280,6 @@ def refractive_index(lbda, pressure=617., temperature=2., relathumidity=0):
 
     return n
 
-
 def saturation_vapor_pressure(temperature):
     """Compute saturation vapor pressure [Pa] for temperature *T* [°C]
     according to Edlén Calculation of the Index of Refraction from
@@ -296,7 +294,6 @@ def saturation_vapor_pressure(temperature):
                   _saturationVaporPressureOverIce(temperature))
 
     return psv       # [Pa]    
-
 
 def _saturationVaporPressureOverIce(temperature):
     """See :func:`saturation_vapor_pressure`"""
