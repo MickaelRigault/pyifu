@@ -82,11 +82,7 @@ class ADR( BaseObject ):
                 airmass=header.get('AIRMASS', 1.1),
                 parangle=header['TEL_PA'])
 
-        obj = cls(**prop)
-        if kwargs:
-            obj.set(**kwargs)
-            
-        return obj
+        return cls(**{**prop, **kwargs})
     
     # =================== #
     #   Methods           #
