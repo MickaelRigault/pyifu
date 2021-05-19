@@ -879,6 +879,9 @@ class SpaxelHandler( SpecSource ):
             newdata = self.data
         if newvariance is None:
             newvariance = self.variance
+        elif newvariance == "None":
+            newvariance = None
+            
         if newheader is None:
             newheader = self.header
         if newlbda is None:
