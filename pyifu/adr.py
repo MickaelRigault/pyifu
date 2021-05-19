@@ -60,6 +60,33 @@ class ADR( BaseObject ):
         """
         if kwargs:
             self.set(**kwargs)
+
+    @classmethod
+    def from_header(cls, header, **kwargs):
+        """ Load ADR() object from SEDM header.\n
+        Default Pressure is 630 [mbar]\n
+        Default lbdaref is 6000 [A]\n
+        
+        Properties
+        ----------
+        header: dict
+            SEDM cube header
+
+        **kwargs:
+            Reset any of the fundamental properties above the given header.
+        """
+        prop = dict(pressure=630,
+                lbdaref=6000,
+                temperature=header["IN_AIR"],
+                relathumidity=header["IN_HUM"],
+                airmass=header.get('AIRMASS', 1.1),
+                parangle=header['TEL_PA'])
+
+        obj = cls(**prop)
+        if kwargs:
+            obj.set(**kwargs)
+            
+        return obj
     
     # =================== #
     #   Methods           #
