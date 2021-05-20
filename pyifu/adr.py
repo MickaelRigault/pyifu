@@ -84,8 +84,7 @@ class ADR( BaseObject ):
         class instance
         """
         from astropy.io import fits
-        return cls.from_header(fits.getheader(filename),
-                                   pressure=pressure, lbdaref=lbdaref,
+        return cls.from_header(fits.getheader(filename), lbdaref=lbdaref,
                                    **kwargs)
     
     @classmethod
