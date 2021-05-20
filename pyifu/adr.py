@@ -62,24 +62,63 @@ class ADR( BaseObject ):
             self.set(**kwargs)
 
     @classmethod
-    def from_header(cls, header, **kwargs):
-        """ Load ADR() object from SEDM header.\n
-        Default Pressure is 630 [mbar]\n
-        Default lbdaref is 6000 [A]\n
+    def from_filename(cls, filename, lbdaref=6000,  **kwargs):
+        """ load ADR() from the given fits file. 
+        This fetchs the header from the file and call cls.from_header() 
         
+        Default pressure and lbdaref can be changed.
+
         Properties
         ----------
         header: dict
             SEDM cube header
 
+        lbdaref: [float] -optional-
+            lbdaref is 6000 [A]
+
         **kwargs:
             Reset any of the fundamental properties above the given header.
+
+        Returns
+        -------
+        class instance
         """
-        prop = dict(pressure=630,
-                lbdaref=6000,
+        from astropy.io import fits
+        return cls.from_header(fits.getheader(filename),
+                                   pressure=pressure, lbdaref=lbdaref,
+                                   **kwargs)
+    
+    @classmethod
+    def from_header(cls, header, pressure=630, lbdaref=6000, default_airmass=1.1 **kwargs):
+        """ Load ADR() object from SEDM header.
+
+        Default pressure and lbdaref can be changed.
+
+        Properties
+        ----------
+        header: dict
+            SEDM cube header
+
+        pressure: [float] -optional-
+            Pressure is 630 [mbar]
+        
+        lbdaref: [float] -optional-
+            lbdaref is 6000 [A]
+
+        default_airmass: [float] -optional-
+            airmass value used if AIRMASS is not found in the header.
+        **kwargs:
+            Reset any of the fundamental properties above the given header.
+
+        Returns
+        -------
+        class instance
+        """
+        prop = dict(pressure=pressure,
+                lbdaref=lbdaref,
                 temperature=header["IN_AIR"],
                 relathumidity=header["IN_HUM"],
-                airmass=header.get('AIRMASS', 1.1),
+                airmass=header.get('AIRMASS', default_airmass),
                 parangle=header['TEL_PA'])
 
         return cls(**{**prop, **kwargs})
@@ -89,7 +128,7 @@ class ADR( BaseObject ):
     # =================== #
     def refract(self, x, y, lbda, backward=False, unit=1.,
                     **kwargs):
-        """If forward (default), return refracted position(s) at
+        """ If forward (default), return refracted position(s) at
         wavelength(s) *lbda* [Å] from reference position(s) *x*,*y*
         (in units of *unit* in arcsec).  Return shape is
         (2,[nlbda],[npos]), where nlbda and npos are the number of
