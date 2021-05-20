@@ -62,7 +62,7 @@ class ADR( BaseObject ):
             self.set(**kwargs)
 
     @classmethod
-    def from_filename(cls, filename, lbdaref=6000,  **kwargs):
+    def from_filename(cls, filename, lbdaref=6000, **kwargs):
         """ load ADR() from the given fits file. 
         This fetchs the header from the file and call cls.from_header() 
         
@@ -89,7 +89,7 @@ class ADR( BaseObject ):
                                    **kwargs)
     
     @classmethod
-    def from_header(cls, header, pressure=630, lbdaref=6000, default_airmass=1.1 **kwargs):
+    def from_header(cls, header, pressure=630, lbdaref=6000, default_airmass=1.1, **kwargs):
         """ Load ADR() object from SEDM header.
 
         Default pressure and lbdaref can be changed.
