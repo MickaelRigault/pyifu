@@ -1964,6 +1964,71 @@ class Cube( SpaxelHandler ):
 
         return get_slice(slice_data, self.index_to_xy(self.indexes), spaxel_vertices=self.spaxel_vertices, 
                                  variance=slice_var, indexes=self.indexes, lbda=lbda)
+
+    def to_metaslices(self, lbda_ranges=[4500,8500], metaslices=5, as_slice=False):
+        """ Split Cube into N metaslices.
+
+        Parameters
+        ----------
+        lbda_ranges: list or array of 2 floats
+            lbda_min and lbda_max of the desired wavelength range
+
+        metaslices: int
+            Number of desired metaslices in lbda_ranges
+
+        as_slices: bool
+            If True (Default), return *metaslices* Slices() object.
+            If False return 3 arrays (data, var, lbda)
+
+        Returns
+        -------
+        Slice() or array
+        """
+        STEP_LBDA_RANGE = np.linspace(lbda_ranges[0],lbda_ranges[1], metaslices+1)
+        lbda_stepbin = np.asarray([STEP_LBDA_RANGE[:-1], STEP_LBDA_RANGE[1:]]).T
+
+        if not as_slice:
+            binned_data = np.zeros( (metaslices, np.shape(self.data)[-1] )) 
+            binned_var = np.zeros( (metaslices, np.shape(self.variance)[-1] )) 
+            binned_lbda = np.zeros( metaslices )
+        else:
+            slices=[]
+
+        for (i,j) in enumerate( lbda_stepbin ):
+
+            slice_obj = self.get_slice(lbda_min=j[0], lbda_max=j[1], slice_object=True)
+            if not as_slice:
+                binned_data[i,:] = slice_obj.data
+                binned_var[i,:] = slice_obj.variance           
+                binned_lbda[i] = np.mean ( self.lbda[  (self.lbda>=j[0]) & (self.lbda<j[1]) ] ) 
+            else:
+                slices.append(slice_obj)
+
+        if not as_slice:
+            return ( binned_data, binned_var, binned_lbda )
+
+        elif as_slice:
+            return slices
+
+    def to_metacube(self, lbda_ranges=[4500,8500], metaslices=5):
+        """ Fuse slices of self to get meta-cube.
+
+        Parameters
+        ----------
+        lbda_ranges: list or array of 2 floats
+            lbda_min and lbda_max of the desired wavelength range
+
+        metaslices: int
+            Number of desired metaslices in lbda_ranges
+
+        Returns
+        -------
+        Cube()
+        """
+        data, var, lbda = self.to_metaslices( lbda_ranges=lbda_ranges, metaslices=metaslices, as_slice=False)   
+        metacube = self.get_new( newdata=data, newlbda=lbda, newvariance=var)
+
+        return metacube    
     # --------- #
     #  SPAXEL   #
     # --------- #
