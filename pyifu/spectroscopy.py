@@ -1965,7 +1965,7 @@ class Cube( SpaxelHandler ):
         return get_slice(slice_data, self.index_to_xy(self.indexes), spaxel_vertices=self.spaxel_vertices, 
                                  variance=slice_var, indexes=self.indexes, lbda=lbda)
 
-    def to_metaslices(self, lbda_ranges=[4500,8500], metaslices=5, as_slice=False):
+    def to_metaslices(self, lbda_ranges, nslices, as_slice=False):
         """ Split Cube into N metaslices.
 
         Parameters
@@ -1973,7 +1973,7 @@ class Cube( SpaxelHandler ):
         lbda_ranges: list or array of 2 floats
             lbda_min and lbda_max of the desired wavelength range
 
-        metaslices: int
+        nslices: int
             Number of desired metaslices in lbda_ranges
 
         as_slices: bool
@@ -1984,7 +1984,7 @@ class Cube( SpaxelHandler ):
         -------
         Slice() or array
         """
-        STEP_LBDA_RANGE = np.linspace(lbda_ranges[0],lbda_ranges[1], metaslices+1)
+        STEP_LBDA_RANGE = np.linspace(lbda_ranges[0],lbda_ranges[1], nslices+1)
         lbda_stepbin = np.asarray([STEP_LBDA_RANGE[:-1], STEP_LBDA_RANGE[1:]]).T
 
         if not as_slice:
@@ -2010,7 +2010,7 @@ class Cube( SpaxelHandler ):
         elif as_slice:
             return slices
 
-    def to_metacube(self, lbda_ranges=[4500,8500], metaslices=5):
+    def to_metacube(self, lbda_ranges, nslices=5):
         """ Fuse slices of self to get meta-cube.
 
         Parameters
@@ -2018,14 +2018,14 @@ class Cube( SpaxelHandler ):
         lbda_ranges: list or array of 2 floats
             lbda_min and lbda_max of the desired wavelength range
 
-        metaslices: int
+        nslices: int
             Number of desired metaslices in lbda_ranges
 
         Returns
         -------
         Cube()
         """
-        data, var, lbda = self.to_metaslices( lbda_ranges=lbda_ranges, metaslices=metaslices, as_slice=False)   
+        data, var, lbda = self.to_metaslices( lbda_ranges=lbda_ranges, nslices=nslices, as_slice=False)   
         metacube = self.get_new( newdata=data, newlbda=lbda, newvariance=var)
 
         return metacube    
