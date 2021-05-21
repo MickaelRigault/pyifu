@@ -1988,9 +1988,9 @@ class Cube( SpaxelHandler ):
         lbda_stepbin = np.asarray([STEP_LBDA_RANGE[:-1], STEP_LBDA_RANGE[1:]]).T
 
         if not as_slice:
-            binned_data = np.zeros( (metaslices, np.shape(self.data)[-1] )) 
-            binned_var = np.zeros( (metaslices, np.shape(self.variance)[-1] )) 
-            binned_lbda = np.zeros( metaslices )
+            binned_data = np.zeros( (nslices, np.shape(self.data)[-1] )) 
+            binned_var = np.zeros( (nslices, np.shape(self.variance)[-1] )) 
+            binned_lbda = np.zeros( nslices )
         else:
             slices=[]
 
