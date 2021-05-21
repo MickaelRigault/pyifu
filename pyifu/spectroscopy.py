@@ -879,7 +879,7 @@ class SpaxelHandler( SpecSource ):
             newdata = self.data
         if newvariance is None:
             newvariance = self.variance
-        elif newvariance == "None":
+        elif type(newvariance) is str and newvariance == "None":
             newvariance = None
             
         if newheader is None:
@@ -1988,19 +1988,24 @@ class Cube( SpaxelHandler ):
         lbda_stepbin = np.asarray([STEP_LBDA_RANGE[:-1], STEP_LBDA_RANGE[1:]]).T
 
         if not as_slice:
-            binned_data = np.zeros( (nslices, np.shape(self.data)[-1] )) 
-            binned_var = np.zeros( (nslices, np.shape(self.variance)[-1] )) 
+            binned_data = np.zeros( (nslices, np.shape(self.data)[-1] ))
+            if self.has_variance():
+                binned_var = np.zeros( (nslices, np.shape(self.variance)[-1] ))
+            else:
+                binned_var = None
             binned_lbda = np.zeros( nslices )
         else:
             slices=[]
 
+            
         for (i,j) in enumerate( lbda_stepbin ):
-
             slice_obj = self.get_slice(lbda_min=j[0], lbda_max=j[1], slice_object=True)
             if not as_slice:
                 binned_data[i,:] = slice_obj.data
-                binned_var[i,:] = slice_obj.variance           
-                binned_lbda[i] = np.mean ( self.lbda[  (self.lbda>=j[0]) & (self.lbda<j[1]) ] ) 
+                if self.has_variance():
+                    binned_var[i,:] = slice_obj.variance
+                    
+                binned_lbda[i] = slice_obj.lbda
             else:
                 slices.append(slice_obj)
 
@@ -2026,7 +2031,7 @@ class Cube( SpaxelHandler ):
         Cube()
         """
         data, var, lbda = self.to_metaslices( lbda_ranges=lbda_ranges, nslices=nslices, as_slice=False)   
-        metacube = self.get_new( newdata=data, newlbda=lbda, newvariance=var)
+        metacube = self.get_new( newdata=data, newlbda=lbda, newvariance=var if var is not None else "None")
 
         return metacube    
     # --------- #
