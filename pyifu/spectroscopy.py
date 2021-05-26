@@ -1790,8 +1790,8 @@ class Slice( SpaxelHandler ):
     
         # - The Patchs
         for i in range(self.nspaxels):
-            c_ = ["None"] if value is None or (np.isnan(value[i]) and empty_if_nan) else colors[i]
-            linewidth = 1 if c_[0] == "None" and lw==0 else lw
+            c_ = "None" if (value is None or (np.isnan(value[i]) and empty_if_nan)) else colors[i]
+            linewidth = 1 if (type(c_) == str and c_ == "None" and lw==0) else lw
             ax.add_patch(patches.Polygon(self.spaxel_vertices+np.asarray([x[i],y[i]]),
                                 facecolor=c_, alpha=alpha, linewidth=linewidth, edgecolor=ec,
                                   **kwargs))
