@@ -1353,7 +1353,7 @@ class SpaxelHandler( SpecSource ):
         lbda  = pandas.Series(self.lbda)
         mapping = pandas.DataFrame( self.spaxel_mapping, index=["x","y"]).T
         verts = pandas.DataFrame(self.spaxel_vertices, columns=["x","y"])
-        header = pandas.Series( self.header)
+        header = pandas.Series( dict(self.header))
         return {"data":data, "variance":var, "lbda":lbda, 
                 "spaxel_mapping":mapping, "spaxel_vertices":verts, "header":header}
         
