@@ -1046,7 +1046,7 @@ class SpaxelHandler( SpecSource ):
     # -------- #
     #   I/O    #
     # -------- #
-    def writeto(self, savefile, format="None", **kwargs):
+    def writeto(self, savefile, format=None, **kwargs):
         """ """
         if format is None:
             format = savefile.split(".")[-1]
