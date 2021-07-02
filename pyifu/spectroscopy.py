@@ -1065,7 +1065,7 @@ class SpaxelHandler( SpecSource ):
             if d is not None:
                 d.to_hdf(savefile, key=key)
 
-    def to_fits(self, savefile, force=True, saveerror=False, headerbased=True):
+    def to_fits(self, savefile, force=True, saveerror=False, headerbased=True, lbdainheader=True):
         """ Save the cube the given `savefile`
 
         Parameters
