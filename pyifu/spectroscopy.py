@@ -1405,12 +1405,9 @@ class SpaxelHandler( SpecSource ):
         -------
         array of float between 0 and 1
         """
-        try:
-            from shapely.vectorized import contains
-            from shapely.geometry   import Polygon
-        except ImportError:
-            raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
         
+        from shapely.vectorized import contains
+        from shapely.geometry   import Polygon
         
         polyvert  = self.spaxels_vertices # np.asarray([verts for verts in np.asarray([self.spaxel_vertices+np.asarray(self.index_to_xy(id_)) for id_ in self.indexes])])
         # xs and ys are the x and y coordinates of all the vertices
@@ -1439,11 +1436,8 @@ class SpaxelHandler( SpecSource ):
         radius_min:[float] - optional-
             
         """
-        try:
-            import shapely
-        except ImportError:
-            raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
-
+        
+        import shapely
         # - Aperture per slice
         aperture = shapely.geometry.Point(x,y).buffer(radius)
         if radius_min is not None:
@@ -1560,10 +1554,9 @@ class SpaxelHandler( SpecSource ):
             all_poly = all_poly[~flagout]
             
         if "polygon" in format:
-            try:
-                from shapely import geometry
-            except ImportError:
-                raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
+            
+            from shapely import geometry
+            
             if format.lower() == "polygons":
                 return [geometry.Polygon(p) for p in all_poly]
             elif format.lower() in ["multipolygon", "multipolygons"]:
