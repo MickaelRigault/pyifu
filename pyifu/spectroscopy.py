@@ -1555,12 +1555,14 @@ class SpaxelHandler( SpecSource ):
             
         if "polygon" in format:
             
-            from shapely import geometry
+            #from shapely import geometry
             
             if format.lower() == "polygons":
-                return [geometry.Polygon(p) for p in all_poly]
+                from shapely.geometry import Polygon
+                return [Polygon(p) for p in all_poly]
             elif format.lower() in ["multipolygon", "multipolygons"]:
-                return geometry.MultiPolygon([geometry.Polygon(p) for p in all_poly])
+                from shapely.geometry import Polygon, MultiPolygon
+                return MultiPolygon([Polygon(p) for p in all_poly])
             raise ValueError("Cannot parse the given format (%s)"%format)
         
         if format in ["list"]:
