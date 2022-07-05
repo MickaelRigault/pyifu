@@ -54,7 +54,7 @@ DOCUMENTATION = \
 
 
 def toolbar_active(toolbar):
-    if toolbar is None or (hasattr(toolbar,"_active") and toolbar._active is None):
+    if toolbar is None or toolbar.get_navigate_mode() is None:
         return False
     
     return True
