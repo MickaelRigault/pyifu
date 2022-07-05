@@ -1046,7 +1046,7 @@ class SpaxelHandler( SpecSource ):
     # -------- #
     #   I/O    #
     # -------- #
-    def writeto(self, savefile, format="None", **kwargs):
+    def writeto(self, savefile, format=None, **kwargs):
         """ """
         if format is None:
             format = savefile.split(".")[-1]
@@ -1065,7 +1065,7 @@ class SpaxelHandler( SpecSource ):
             if d is not None:
                 d.to_hdf(savefile, key=key)
 
-    def to_fits(self, savefile, force=True, saveerror=False, headerbased=True):
+    def to_fits(self, savefile, force=True, saveerror=False, headerbased=True, lbdainheader=True):
         """ Save the cube the given `savefile`
 
         Parameters
@@ -1405,12 +1405,9 @@ class SpaxelHandler( SpecSource ):
         -------
         array of float between 0 and 1
         """
-        try:
-            from shapely.vectorized import contains
-            from shapely.geometry   import Polygon
-        except ImportError:
-            raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
         
+        from shapely.vectorized import contains
+        from shapely.geometry   import Polygon
         
         polyvert  = self.spaxels_vertices # np.asarray([verts for verts in np.asarray([self.spaxel_vertices+np.asarray(self.index_to_xy(id_)) for id_ in self.indexes])])
         # xs and ys are the x and y coordinates of all the vertices
@@ -1439,11 +1436,8 @@ class SpaxelHandler( SpecSource ):
         radius_min:[float] - optional-
             
         """
-        try:
-            import shapely
-        except ImportError:
-            raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
-
+        
+        import shapely
         # - Aperture per slice
         aperture = shapely.geometry.Point(x,y).buffer(radius)
         if radius_min is not None:
@@ -1560,14 +1554,15 @@ class SpaxelHandler( SpecSource ):
             all_poly = all_poly[~flagout]
             
         if "polygon" in format:
-            try:
-                from shapely import geometry
-            except ImportError:
-                raise ImportError("You do not have shapely (or at least no shapely.vectorized). This method needs this library: pip install shapely")
+            
+            #from shapely import geometry
+            
             if format.lower() == "polygons":
-                return [geometry.Polygon(p) for p in all_poly]
+                from shapely.geometry import Polygon
+                return [Polygon(p) for p in all_poly]
             elif format.lower() in ["multipolygon", "multipolygons"]:
-                return geometry.MultiPolygon([geometry.Polygon(p) for p in all_poly])
+                from shapely.geometry import Polygon, MultiPolygon
+                return MultiPolygon([Polygon(p) for p in all_poly])
             raise ValueError("Cannot parse the given format (%s)"%format)
         
         if format in ["list"]:
