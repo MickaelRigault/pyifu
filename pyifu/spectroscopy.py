@@ -1767,7 +1767,7 @@ class Slice( SpaxelHandler ):
         if value is None or np.all(np.isnan(value)):
             show_colorbar = False
         else:
-            cmap = mpl.cm.get_cmap(cmap)
+            cmap = mpl.get_cmap(cmap)
             # - which colors
             if vmin is None:
                 vmin = np.percentile(value[value==value],0)

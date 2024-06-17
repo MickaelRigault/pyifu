@@ -54,8 +54,8 @@ DOCUMENTATION = \
 
 
 def toolbar_active(toolbar):
-    if toolbar is None or toolbar.get_navigate_mode() is None:
-        return False
+#    if toolbar is None or toolbar.get_navigate_mode() is None:
+#        return False
     
     return True
 
@@ -543,11 +543,23 @@ class InteractiveCube( BaseObject ):
     def _clean_spec_axspec_(self, only_latest=False):
         """ """
         if not only_latest:
-            self.axspec.lines = [] # remove the spectra lines
-            self.axspec.collections = [] # and their variance
+            #self.axspec.lines.clear()
+            #self.axspec.collections.clear()
+            for line in self.axspec.get_lines():
+                line.remove()
+
+            for col in self.axspec.collections:
+                if hasattr(col, "remove"):
+                    col.remove()
+                else:
+                    [c.remove() for c in col]
         else:
-            self.axspec.lines = self.axspec.lines[:-1] # remove the spectra lines
-            self.axspec.collections = self.axspec.collections[:-1] # and their variance
+            last_line = self.axspec.get_lines()
+            if last_line is not None and len(last_line)>0:
+                last_line[-1].remove()
+                
+            if self.axspec.collections is not None and len(self.axspec.collections)>0:
+                self.axspec.collections[-1].remove()
         
     def _clean_wave_axspec_(self):
         """ Remove the selected wavelength """
